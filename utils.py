@@ -138,3 +138,25 @@ def reconstructTrajectory(xStart, yStart, u, v, mn, Nx, Ny, Nt):
         xEnd = xEndN
         yEnd = yEndN
     return [xEnd-xStart, yEnd-yStart, m]
+
+def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny):
+    un = np.zeros([Nt, Nx*Ny])
+    vn = np.zeros([Nt, Nx*Ny])
+    mn = np.zeros([Nt, Nx*Ny])
+    for n in range(0, Nt-1):
+        [dun, dvn] = spaceGrad(phi, n, Nx, Ny)
+        dmn = -spaceDiv(np.array([dun,dvn]), Nx, Ny)
+        un[n,:] = dun
+        vn[n,:] = dvn
+        mn[n,:] = dmn
+    
+    u = np.zeros(Nx*Ny)
+    v = np.zeros(Nx*Ny)
+    m = np.zeros(Nx*Ny)
+    for yStart in range(0,Ny):
+        for xStart in range(0,Nx):
+            [up, vp, mp] = reconstructTrajectory(xStart, yStart, un, vn, mn, Nx, Ny, Nt)
+            u[yStart*Nx + xStart] = up
+            v[yStart*Nx + xStart] = vp
+            m[yStart*Nx + xStart] = mp
+    return u, v, m

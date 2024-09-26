@@ -566,22 +566,8 @@ def stepA(mu, q, rho0, rhoT, r, Nt, Nx, Ny):
                 Ax.append(n*Nx*Ny+y*Nx+x)
                 Ay.append(n*Nx*Ny+y*Nx+x)
                 Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2)
-
-  # Av = cupy.asarray(np.array(Av).flatten())
-  # Ax = cupy.asarray(np.array(Ax).flatten())
-  # Ay = cupy.asarray(np.array(Ay).flatten())
-  # F = cupy.asarray(np.array(F).flatten())
-
-  # A = cupyx.scipy.sparse.csr_matrix((Av, (Ax, Ay)), shape=(Nt*Nx*Ny, Nt*Nx*Ny))
-  # x = cupyx.scipy.sparse.linalg.spsolve(A, F)
-
   A = sparse.csr_matrix((Av, (Ax, Ay)), shape=[Nt*Nx*Ny, Nt*Nx*Ny])
-  return linsolve.spsolve(A, F)
-  # Acpu = sparse.csr_matrix((Av, (Ax, Ay)), shape=[Nt*Nx*Ny, Nt*Nx*Ny], dtype=np.float32)
-  # A = cupyx.scipy.sparse.csr_matrix(Acpu)
-  # b = cp.asarray(F, dtype=cp.float32)
-  # return cp.asnumpy(cupyx.scipy.sparse.linalg.spilu(A).solve(b))
-  
+  return linsolve.spsolve(A, F) 
 
 def stepB(p, Nt, Nx, Ny):
   a = np.zeros(Nt*Nx*Ny)
@@ -597,17 +583,10 @@ def stepB(p, Nt, Nx, Ny):
       a[i] = alpha
       b1[i] = beta1
       b2[i] = beta2
-
-      # rho = np.sqrt(beta1**2 + beta2**2)
-      # xaxis = np.linspace(-np.abs(alpha), 0)
-      # plt.plot(xaxis, np.sqrt(-2*xaxis))
-      # plt.scatter([alpha], [rho], c = 'red')
-      # plt.show()
     else:
       # on passe (alpha, beta1, beta2) en coordonnées cylindriques (alpha, rho, theta)
       rho = np.sqrt(beta1**2 + beta2**2)
       theta = np.arctan2(beta2, beta1)
-
       if -32*(alpha+1)**3-108*rho**2 < 0:
         # print("racine unique")
         zh = -1/3*(alpha + 1)/np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
@@ -619,13 +598,6 @@ def stepB(p, Nt, Nx, Ny):
         zh = 2*np.sqrt(2/3)*np.sqrt(-alpha-1)*np.cos(1/3*np.arccos(np.power(3/2, 3/2)*rho/np.power(-alpha-1, 3/2)))
         alphaH = -0.5*zh**2
         rhoH = zh
-
-      # xaxis = np.linspace(-np.abs(alphaH-alpha), 0)
-      # plt.plot(xaxis, np.sqrt(-2*xaxis))
-      # plt.scatter([alpha], [rho], c = 'red')
-      # plt.scatter([alphaH], [rhoH], c = 'blue')
-      # plt.show()
-
       # on passe (alphaH, rhoH, theta) en coordonnées carthésiennes (alphaH, beta1H, beta2H)
       beta1H = rhoH*np.cos(theta)
       beta2H = rhoH*np.sin(theta)
@@ -633,17 +605,13 @@ def stepB(p, Nt, Nx, Ny):
       a[i] = alphaH
       b1[i] = beta1H
       b2[i] = beta2H
-
-    # print(a[i], b1[i], b2[i])
-
   return np.array([a, b1, b2])
 
-def solve(rho0, rhoT, Nt, Nx, Ny, r=1, epsilon=0.3):    
-    # phiPrev = np.zeros(Nt*Nx*Ny)
+def solve(rho0, rhoT, Nt, Nx, Ny, r=1, epsilon=0.3, max_it=100):    
     qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
     mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] m\to \R^2
     
-    while True:
+    for i in range(0,max_it):
       phi = stepA(mu, qPrev, rho0, rhoT, r, Nt, Nx, Ny)
     
       spaceTimeGradPhi = spaceTimeGrad(phi, Nt, Nx, Ny)
@@ -656,7 +624,7 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, epsilon=0.3):
     
       res = spaceTimeGradPhi[0,:] + 0.5*(np.power(spaceTimeGradPhi[1,:], 2) + np.power(spaceTimeGradPhi[2,:], 2) )
       crit = np.sqrt( np.sum( np.multiply(mu[0,:], np.abs(res))) / np.sum( np.multiply(mu[0,:], np.power(spaceTimeGradPhi[1,:], 2) + np.power(spaceTimeGradPhi[2,:], 2) )) )
-      print(crit)
+      print(str(crit)+" ("+str(i+1)+"/"+str(max_it)+")")
     
       if crit <= epsilon:
         break

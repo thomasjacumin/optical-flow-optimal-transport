@@ -159,4 +159,55 @@ def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny):
             u[yStart*Nx + xStart] = up
             v[yStart*Nx + xStart] = vp
             m[yStart*Nx + xStart] = mp
+    m = -spaceDiv(np.array([u,v]), Nx, Ny)
     return u, v, m
+
+
+def apply_opticalflow(f1, u, v, w, h, m=np.array([None])):  
+    if m.all() != None:
+      f1 = (1+m)*f1
+    
+    x = np.zeros([w*h])
+    for i in range(0,h):
+      for j in range(0,w):
+        tildI = i - v[i*w+j]
+        tildJ = j - u[i*w+j]
+        dI = tildI-int(tildI)
+        dJ = tildJ-int(tildJ)
+
+        w1 = (1-dI)*(1-dJ)
+        w2 = dJ*(1-dI)
+        w3 = dI*dJ
+        w4 = (1-dJ)*dI
+
+        if tildI >= h:
+          tildI = h-1
+        if tildJ >= w:
+          tileJ = w-1
+        if tildI < 0:
+          tildI = 0
+        if tildJ < 0:
+          tildJ = 0
+
+        if int(tildI)*w+int(tildJ)<w*h and i*w+j<w*h:
+          if int(tildI) < h-1 and int(tildJ) < w-1: # not on the left or bottom boundaries
+            x[i*w+j] = w1*f1[int(tildI)*w + int(tildJ)]
+            x[i*w+j] = x[i*w+j] + w2*f1[int(tildI)*w + int(tildJ)+1]
+            x[i*w+j] = x[i*w+j] + w3*f1[int(tildI+1)*w + int(tildJ)+1]
+            x[i*w+j] = x[i*w+j] + w4*f1[int(tildI+1)*w + int(tildJ)]
+          elif int(tildI) < h-1 and int(tildJ) == w-1: # left boundary
+            x[i*w+j] = w1*f1[int(tildI)*w + int(tildJ)]
+            x[i*w+j] = x[i*w+j] + w2*f1[int(tildI)*w + int(tildJ)]
+            x[i*w+j] = x[i*w+j] + w3*f1[int(tildI+1)*w + int(tildJ)]
+            x[i*w+j] = x[i*w+j] + w4*f1[int(tildI+1)*w + int(tildJ)]
+          elif int(tildI) == h-1 and int(tildJ) < w-1: # bottom boundary
+            x[i*w+j] = w1*f1[int(tildI)*w + int(tildJ)]
+            x[i*w+j] = x[i*w+j] + w2*f1[int(tildI)*w + int(tildJ)+1]
+            x[i*w+j] = x[i*w+j] + w3*f1[int(tildI)*w + int(tildJ)+1]
+            x[i*w+j] = x[i*w+j] + w4*f1[int(tildI)*w + int(tildJ)]
+          else: # bottom-left corner
+            x[i*w+j] = w1*f1[int(tildI)*w + int(tildJ)]
+            x[i*w+j] = x[i*w+j] + w2*f1[int(tildI)*w + int(tildJ)]
+            x[i*w+j] = x[i*w+j] + w3*f1[int(tildI)*w + int(tildJ)]
+            x[i*w+j] = x[i*w+j] + w4*f1[int(tildI)*w + int(tildJ)]
+    return x

@@ -31,6 +31,16 @@ def openGrayscaleImage(inputPathname):
   h = np.size(f,0)
   return f.flatten() / 255, w, h
 
+def saveFlo(w,h,u,v,pathname):
+    f = open(pathname, 'wb')
+    np.array([202021.25], dtype=np.float32).tofile(f)
+    np.array([w,h], dtype=np.int32).tofile(f)
+    data = np.zeros([w*h,2])
+    data[:,0] = u
+    data[:,1] = v
+    # data.reshape([h,w,2])
+    np.array(data, dtype=np.float32).tofile(f)
+
 def spaceDiv(u, Nx, Ny):
   dx = 1
   dy = 1

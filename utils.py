@@ -211,3 +211,49 @@ def apply_opticalflow(f1, u, v, w, h, m=np.array([None])):
             x[i*w+j] = x[i*w+j] + w3*f1[int(tildI)*w + int(tildJ)]
             x[i*w+j] = x[i*w+j] + w4*f1[int(tildI)*w + int(tildJ)]
     return x
+
+def openFlo(pathname):
+    f = open(pathname, 'rb')
+    magic = np.fromfile(f, np.float32, count=1)[0]
+    if 202021.25 != magic:
+        print('Magic number incorrect. Invalid .flo file')
+    w = np.fromfile(f, np.int32, count=1)[0]
+    h = np.fromfile(f, np.int32, count=1)[0]
+    data = np.fromfile(f, np.float32)
+    data_2D = np.reshape(data, newshape=(h,w,2));
+    x = data_2D[...,0].flatten()
+    y = data_2D[...,1].flatten()
+    return w, h, x, y
+
+def saveFlo(w,h,u,v,pathname):
+    f = open(pathname, 'wb')
+    np.array([202021.25], dtype=np.float32).tofile(f)
+    np.array([w,h], dtype=np.int32).tofile(f)
+    data = np.zeros([w*h,2])
+    data[:,0] = u
+    data[:,1] = v
+    # data.reshape([h,w,2])
+    np.array(data, dtype=np.float32).tofile(f)
+
+def EE(w, h, u, v, uGT, vGT):
+    _EE  = np.sqrt( (u-uGT)**2 + (v-vGT)**2 )
+    _EE_ignore = []
+    for i in range(0, w*h):
+        if _EE[i] <= 50:
+            _EE_ignore.append(_EE[i])
+    AEE  = np.sum( _EE_ignore )/len(_EE_ignore)
+    SDEE = np.sqrt( np.sum((_EE_ignore - AEE)**2 )/len(_EE_ignore) )
+    return AEE, SDEE
+
+def AE(w, h, u, v, uGT, vGT):
+    _AE  = np.arccos( (1.0 + u*uGT + v*vGT)/(np.sqrt(1.0 + u**2 + v**2)*np.sqrt(1.0 + uGT**2 + vGT**2)) )
+    _AE_ignore = []
+    for i in range(0, w*h):
+        if math.isnan(_AE[i]) == False:
+            _AE_ignore.append(_AE[i])
+    AAE  = np.sum( _AE_ignore )/len(_AE_ignore)
+    SDAE = np.sqrt( np.sum((_AE_ignore - AAE)**2 )/len(_AE_ignore) )
+    return AAE, SDAE
+
+def IE(w, h, I, IGT):
+    return np.sqrt ( np.sum( (255*I-255*IGT)**2 ) / (w*h) )

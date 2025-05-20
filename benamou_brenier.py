@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import sparse
-from scipy.sparse.linalg.dsolve import linsolve
+from scipy.sparse.linalg import spsolve
 
 dt = 1#./Nt
 dx = 1#./Nx
@@ -567,7 +567,7 @@ def stepA(mu, q, rho0, rhoT, r, Nt, Nx, Ny):
                 Ay.append(n*Nx*Ny+y*Nx+x)
                 Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2)
   A = sparse.csr_matrix((Av, (Ax, Ay)), shape=[Nt*Nx*Ny, Nt*Nx*Ny])
-  return linsolve.spsolve(A, F) 
+  return spsolve(A, F) 
 
 def stepB(p, Nt, Nx, Ny):
   a = np.zeros(Nt*Nx*Ny)

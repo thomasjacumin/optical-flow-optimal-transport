@@ -1,43 +1,84 @@
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+import argparse
+import time
 
 import utils
 import benamou_brenier
 
-f1, w, h = utils.openGrayscaleImage("./data/frame10-mini.png")
-f2, w, h = utils.openGrayscaleImage("./data/frame11-mini.png")
+# Parse parameters
+parser = argparse.ArgumentParser(description="sample argument parser")
+parser.add_argument("f0", help="first frame")
+parser.add_argument("f1", help="second frame")
+parser.add_argument("--out", nargs='?', help="optical flow output")
+parser.add_argument("--ground-truth", nargs='?', help="optical flow ground truth")
+parser.add_argument("--save-benchmark", nargs='?', help="file output of benchmark")
+# Model parameters
+parser.add_argument("--Nt", nargs='?', type=int, default=4, help="Discretization in time")
+parser.add_argument("--epsilon", nargs='?', type=float, default=0.1, help="Stopping threshold")
+parser.add_argument("--normalize", action=argparse.BooleanOptionalAction, help="normalize the input images if enabled")
 
-c_x = int(w/2)
-c_y = int(h/2)
-R = 30
-for i in range(0, h):
-    for j in range(0, w):
-        if (i-c_x)**2 + (j-c_y)**2 < R**2:
-            f2[i+j*w] = f2[i+j*w]+0.5
+args = parser.parse_args()
 
-Nt = 4
-rho0 = f1#0.5*Ny*Nx*f1/np.sum(f1)
-rhoT = f2#0.5*Ny*Nx*f2/np.sum(f2)
+np.random.seed(0)
 
-plt.imshow(rho0.reshape([h,w]), cmap='gray', vmin=0, vmax=1)
-plt.show()
-plt.imshow(rhoT.reshape([h,w]), cmap='gray', vmin=0, vmax=1)
-plt.show()
+# Create data
+f1, w, h = utils.openGrayscaleImage(args.f0)
+f2, w, h = utils.openGrayscaleImage(args.f1)
 
-mu, phi, q = benamou_brenier.solve(rho0, rhoT, Nt, w, h, epsilon=0.1, r=1.1)
-u, v, m = utils.opticalflow_from_benamoubrenier(phi, Nt, w, h)
+print("***********************************")
+print("Input images: ")
+print(" - f0 = "+str(args.f0))
+print(" - f1 = "+str(args.f1))
+if args.normalize == True:
+    print(" - normalize input images")
+    f1 = f1/(np.sum(f1)/(w*h))
+    f2 = f2/(np.sum(f2)/(w*h))
 
-rgb = utils.opticalFlowToRGB(u, v, w, h)
-plt.imshow(rgb)
-plt.show()
+# Start timer
+start_time = time.time()
+# Solve
+mu, phi, q = benamou_brenier.solve(f1, f2, args.Nt, w, h, epsilon=args.epsilon, r=1.1)
+u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
+# stop timer
+timer = time.time() - start_time
 
-rec = utils.apply_opticalflow(f1, u, v, w, h, m)
-rec = np.clip(rec, 0, 1)
-# plt.imshow(rec.reshape([h,w]), vmin=0, vmax=1, cmap='gray')
-# plt.show()  
+# Benchmark
+if args.ground_truth:
+    print("Benchmark:")
+    rec = utils.apply_opticalflow(f1, u, v, w, h, m)
+    rec = np.clip(rec, 0, 1)
+    wGT, hGT, uGT, vGT = utils.openFlo(args.ground_truth)
+    assert(wGT == w and hGT == h)
+    AEE, SDEE = utils.EE(w, h, u, v, uGT, vGT)
+    AAE, SDAE = utils.AE(w, h, u, v, uGT, vGT)
+    IE = utils.IE(w, h, rec, f2)
+    print(" - EE-mean: "+str(AEE))
+    print(" - EE-stddev: "+str(SDEE))
+    print(" - AE-mean: "+str(AAE))
+    print(" - AE-stddev: "+str(SDAE))
+    print(" - IE: "+str(IE))
+    print(" - time: "+str(timer)+"s")
 
-Image.fromarray(np.uint8(255*np.clip((m+1)/2, 0, 1).reshape([h,w])), 'L').save("./m_t.png")
-Image.fromarray(np.uint8(255*rec.reshape([h,w])), 'L').save("./x.png")
-Image.fromarray(np.uint8(255*np.abs(rec-f2).reshape([h,w])), 'L').save("./error.png")
-Image.fromarray(np.uint8(255*rgb), 'RGB').save("./results/u.png")
+    if args.save_benchmark:
+        f = open(args.save_benchmark, "w")
+        f.write("EE-mean: "+str(AEE)+"\n")
+        f.write("EE-stddev: "+str(SDEE)+"\n")
+        f.write("AE-mean: "+str(AAE)+"\n")
+        f.write("AE-stddev: "+str(SDAE)+"\n")
+        f.write("IE: "+str(IE)+"\n")
+        f.write("time: "+str(timer)+"s")
+        f.close()
+
+if args.out:
+    print("saving flo file...")
+    utils.saveFlo(w, h, u, v, args.out)
+    
+print("***********************************")
+
+# rgb = utils.opticalFlowToRGB(u, v, w, h)
+# Image.fromarray(np.uint8(255*np.clip((m+1)/2, 0, 1).reshape([h,w])), 'L').save("./m_t.png")
+# Image.fromarray(np.uint8(255*rec.reshape([h,w])), 'L').save("./x.png")
+# Image.fromarray(np.uint8(255*np.abs(rec-f2).reshape([h,w])), 'L').save("./error.png")
+# Image.fromarray(np.uint8(255*rgb), 'RGB').save("./results/u.png")

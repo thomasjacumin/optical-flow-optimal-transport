@@ -47,7 +47,7 @@ run() {
                 # FOTO
                 if [ ! -f "results/middlebury/$input/.out.foto.sucess" ]; then
                     python3 main.py $frame10 $frame11 --ground-truth=$ground_truth --out=results/middlebury/$input/foto.flo --save-benchmark=results/middlebury/$input/foto.benchmark.txt \
-                        --epsilon=0.1 --Nt=8
+                        --epsilon=0.1 --Nt=6
                     ./bin/color_flow results/middlebury/$input/foto.flo results/middlebury/$input/foto.png $normalizing
                     touch results/middlebury/$input/.out.foto.sucess
                 fi

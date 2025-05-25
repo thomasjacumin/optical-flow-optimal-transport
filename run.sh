@@ -6,13 +6,18 @@ run__help() {
 
 run__download() {
     mkdir data
-    # Middlebury
-    rm -Rf data/middlebury
+    # Middlebury-1
+    rm -Rf data/middlebury-1
+    wget https://vision.middlebury.edu/flow/data/comp/zip/eval-gray-twoframes.zip
+    unzip -qq eval-gray-twoframes.zip "eval-data-gray/**" -d data/middlebury-1/
+    rm eval-gray-twoframes.zip
+    # Middlebury-2
+    rm -Rf data/middlebury-2
     wget https://vision.middlebury.edu/flow/data/comp/zip/other-gray-twoframes.zip
-    unzip -qq other-gray-twoframes.zip "other-data-gray/**" -d data/middlebury/
+    unzip -qq other-gray-twoframes.zip "other-data-gray/**" -d data/middlebury-2/
     rm other-gray-twoframes.zip
     wget https://vision.middlebury.edu/flow/data/comp/zip/other-gt-flow.zip
-    unzip -qq other-gt-flow.zip "other-gt-flow/**" -d data/middlebury/
+    unzip -qq other-gt-flow.zip "other-gt-flow/**" -d data/middlebury-2/
     rm other-gt-flow.zip
 }
 
@@ -27,29 +32,77 @@ run__restart() {
 
 run() {
     mkdir results
-    # Middlebury
-    mkdir results/middlebury
-    for dir in data/middlebury/other-data-gray/*; do
+    # Middlebury-1
+    mkdir results/middlebury-1
+    for dir in data/middlebury-1/eval-data-gray/*; do
         if [ -d "$dir" ]; then
             input=${dir##*/}
-            frame10=data/middlebury/other-data-gray/$input/frame10.png
-            frame11=data/middlebury/other-data-gray/$input/frame11.png
-            ground_truth=data/middlebury/other-gt-flow/$input/flow10.flo
+            frame10=data/middlebury-1/eval-data-gray/$input/frame10.png
+            frame11=data/middlebury-1/eval-data-gray/$input/frame11.png
+
+            mkdir results/middlebury-1/$input
+
+            # HS
+            if [ ! -f "results/middlebury-1/$input/.out.hs.sucess" ]; then
+                python3 main.py $frame10 $frame11 \
+                    --out=results/middlebury-1/$input/hs.flo --save-benchmark=results/middlebury-1/$input/hs.benchmark.txt \
+                    --save-reconstruction=results/middlebury-1/$input/hs.rec.png \
+                    --save-lum=results/middlebury-1/$input/hs.lum.png \
+                    --algo=HS --alpha=0.1 --lambda=0.2
+                ./bin/color_flow results/middlebury-1/$input/hs.flo results/middlebury-1/$input/hs.png
+                touch results/middlebury-1/$input/.out.hs.sucess
+            fi
+
+            # FOTO
+            if [ ! -f "results/middlebury-1/$input/.out.foto.sucess" ]; then
+                python3 main.py $frame10 $frame11 \
+                    --out=results/middlebury-1/$input/foto.flo --save-benchmark=results/middlebury-1/$input/foto.benchmark.txt \
+                    --save-reconstruction=results/middlebury-1/$input/foto.rec.png \
+                    --save-lum=results/middlebury-1/$input/foto.lum.png \
+                    --algo=foto --epsilon=0.1 --Nt=4
+                ./bin/color_flow results/middlebury-1/$input/foto.flo results/middlebury-1/$input/foto.png
+                touch results/middlebury-1/$input/.out.foto.sucess
+            fi
+        fi
+    done
+
+    # Middlebury-2
+    mkdir results/middlebury-2
+    for dir in data/middlebury-2/other-data-gray/*; do
+        if [ -d "$dir" ]; then
+            input=${dir##*/}
+            frame10=data/middlebury-2/other-data-gray/$input/frame10.png
+            frame11=data/middlebury-2/other-data-gray/$input/frame11.png
+            ground_truth=data/middlebury-2/other-gt-flow/$input/flow10.flo
 
             if test -f "$ground_truth"; then
-                mkdir results/middlebury/$input
+                mkdir results/middlebury-2/$input
                 
                 # Generate ground truth           
-                normalizing=$(./bin/color_flow $ground_truth results/middlebury/$input/flow10.png | grep -Eo '^max motion: [[:digit:]]+([.][[:digit:]]+)?' | grep -Eo '[[:digit:]]+([.][[:digit:]]+)?$')
-                ./bin/color_flow $ground_truth results/middlebury/$input/flow10.png $normalizing
+                normalizing=$(./bin/color_flow $ground_truth results/middlebury-2/$input/flow10.png | grep -Eo '^max motion: [[:digit:]]+([.][[:digit:]]+)?' | grep -Eo '[[:digit:]]+([.][[:digit:]]+)?$')
+                ./bin/color_flow $ground_truth results/middlebury-2/$input/flow10.png $normalizing
                 echo "optical flow will be normalize by ${normalizing}"
     
+                # HS
+                if [ ! -f "results/middlebury-2/$input/.out.hs.sucess" ]; then
+                    python3 main.py $frame10 $frame11 --ground-truth=$ground_truth \
+                        --out=results/middlebury-2/$input/hs.flo --save-benchmark=results/middlebury-2/$input/hs.benchmark.txt \
+                        --save-reconstruction=results/middlebury-2/$input/hs.rec.png \
+                        --save-lum=results/middlebury-2/$input/hs.lum.png \
+                        --algo=HS --alpha=0.1 --lambda=0.2
+                    ./bin/color_flow results/middlebury-2/$input/hs.flo results/middlebury-2/$input/hs.png # $normalizing
+                    touch results/middlebury-2/$input/.out.hs.sucess
+                fi
+
                 # FOTO
-                if [ ! -f "results/middlebury/$input/.out.foto.sucess" ]; then
-                    python3 main.py $frame10 $frame11 --ground-truth=$ground_truth --out=results/middlebury/$input/foto.flo --save-benchmark=results/middlebury/$input/foto.benchmark.txt \
-                        --epsilon=0.1 --Nt=6
-                    ./bin/color_flow results/middlebury/$input/foto.flo results/middlebury/$input/foto.png $normalizing
-                    touch results/middlebury/$input/.out.foto.sucess
+                if [ ! -f "results/middlebury-2/$input/.out.foto.sucess" ]; then
+                    python3 main.py $frame10 $frame11 --ground-truth=$ground_truth \
+                        --out=results/middlebury-2/$input/foto.flo --save-benchmark=results/middlebury-2/$input/foto.benchmark.txt \
+                        --save-reconstruction=results/middlebury-2/$input/foto.rec.png \
+                        --save-lum=results/middlebury-2/$input/foto.lum.png \
+                        --algo=foto --epsilon=0.1 --Nt=4
+                    ./bin/color_flow results/middlebury-2/$input/foto.flo results/middlebury-2/$input/foto.png # $normalizing
+                    touch results/middlebury-2/$input/.out.foto.sucess
                 fi
 
             fi

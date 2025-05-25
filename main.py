@@ -15,10 +15,15 @@ parser.add_argument("f1", help="second frame")
 parser.add_argument("--out", nargs='?', help="optical flow output")
 parser.add_argument("--ground-truth", nargs='?', help="optical flow ground truth")
 parser.add_argument("--save-benchmark", nargs='?', help="file output of benchmark")
+parser.add_argument("--save-reconstruction", nargs='?', help="file output of reconstruction")
+parser.add_argument("--save-lum", nargs='?', help="file output of luminosity")
 # Model parameters
+parser.add_argument("--algo", nargs='?', help="Algorithm")
 parser.add_argument("--Nt", nargs='?', type=int, default=4, help="Discretization in time")
 parser.add_argument("--epsilon", nargs='?', type=float, default=0.1, help="Stopping threshold")
 parser.add_argument("--normalize", action=argparse.BooleanOptionalAction, help="normalize the input images if enabled")
+parser.add_argument("--alpha", nargs='?', type=float, default=0.1, help="Horn-Schunck alpha")
+parser.add_argument("--lambdaa", nargs='?', type=float, default=0.2, help="Horn-Schunck lambda")
 
 args = parser.parse_args()
 
@@ -40,40 +45,58 @@ if args.normalize == True:
 # Start timer
 start_time = time.time()
 # Solve
-mu, phi, q = benamou_brenier.solve(f1, f2, args.Nt, w, h, epsilon=args.epsilon, r=1.1)
-u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
+if args.algo == 'foto':
+    mu, phi, q = benamou_brenier.solve(f1, f2, args.Nt, w, h, epsilon=args.epsilon, r=1.1)
+    u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
+elif args.algo == 'HS':
+    classical = classical.GLLOpticalFlow(w,h)
+    classical.setAlpha(args.alpha)
+    classical.setLambda(args.lambdaa)
+    [u, v, m] = classical.assemble(f1, f2).process()
+else:
+    assert("not implemented")
 # stop timer
 timer = time.time() - start_time
 
 # Benchmark
+print("Benchmark:")
+rec = utils.apply_opticalflow(f1, u, v, w, h, m)
+rec = np.clip(rec, 0, 1)
+IE = utils.IE(w, h, rec, f2)
+print(" - time: "+str(timer)+"s")
+print(" - IE: "+str(IE))
+
 if args.ground_truth:
-    print("Benchmark:")
-    rec = utils.apply_opticalflow(f1, u, v, w, h, m)
-    rec = np.clip(rec, 0, 1)
     wGT, hGT, uGT, vGT = utils.openFlo(args.ground_truth)
     assert(wGT == w and hGT == h)
     AEE, SDEE = utils.EE(w, h, u, v, uGT, vGT)
     AAE, SDAE = utils.AE(w, h, u, v, uGT, vGT)
-    IE = utils.IE(w, h, rec, f2)
     print(" - EE-mean: "+str(AEE))
     print(" - EE-stddev: "+str(SDEE))
     print(" - AE-mean: "+str(AAE))
     print(" - AE-stddev: "+str(SDAE))
-    print(" - IE: "+str(IE))
-    print(" - time: "+str(timer)+"s")
-
-    if args.save_benchmark:
-        f = open(args.save_benchmark, "w")
+    
+if args.save_benchmark:
+    f = open(args.save_benchmark, "w")
+    if args.ground_truth:
         f.write("EE-mean: "+str(AEE)+"\n")
         f.write("EE-stddev: "+str(SDEE)+"\n")
         f.write("AE-mean: "+str(AAE)+"\n")
         f.write("AE-stddev: "+str(SDAE)+"\n")
-        f.write("IE: "+str(IE)+"\n")
-        f.write("time: "+str(timer)+"s")
-        f.close()
+    f.write("IE: "+str(IE)+"\n")
+    f.write("time: "+str(timer)+"s")
+    f.close()
 
 if args.out:
     print("saving flo file...")
     utils.saveFlo(w, h, u, v, args.out)
+
+if args.save_reconstruction:
+    print("saving reconstruction...")
+    Image.fromarray(np.uint8(255*rec.reshape([h,w])), 'L').save(args.save_reconstruction)
+
+if args.save_lum:
+    print("saving luminosity...")
+    Image.fromarray(np.uint8(255*np.clip((m+1)/2, 0, 1).reshape([h,w])), 'L').save(args.save_lum)
     
 print("***********************************")

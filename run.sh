@@ -42,15 +42,15 @@ run() {
 
             mkdir results/middlebury-1/$input
 
-            # HS
-            if [ ! -f "results/middlebury-1/$input/.out.hs.sucess" ]; then
+            # Gennert and Negahdaripour
+            if [ ! -f "results/middlebury-1/$input/.out.gn.sucess" ]; then
                 python3 main.py $frame10 $frame11 \
-                    --out=results/middlebury-1/$input/hs.flo --save-benchmark=results/middlebury-1/$input/hs.benchmark.txt \
-                    --save-reconstruction=results/middlebury-1/$input/hs.rec.png \
-                    --save-lum=results/middlebury-1/$input/hs.lum.png \
-                    --algo=HS --alpha=0.1 --lambda=0.2
-                ./bin/color_flow results/middlebury-1/$input/hs.flo results/middlebury-1/$input/hs.png
-                touch results/middlebury-1/$input/.out.hs.sucess
+                    --out=results/middlebury-1/$input/gn.flo --save-benchmark=results/middlebury-1/$input/gn.benchmark.txt \
+                    --save-reconstruction=results/middlebury-1/$input/gn.rec.png \
+                    --save-lum=results/middlebury-1/$input/gn.lum.png \
+                    --algo=GN --alpha=0.1 --lambda=0.2
+                ./bin/color_flow results/middlebury-1/$input/gn.flo results/middlebury-1/$input/gn.png
+                touch results/middlebury-1/$input/.out.gn.sucess
             fi
 
             # FOTO
@@ -83,15 +83,15 @@ run() {
                 ./bin/color_flow $ground_truth results/middlebury-2/$input/flow10.png $normalizing
                 echo "optical flow will be normalize by ${normalizing}"
     
-                # HS
-                if [ ! -f "results/middlebury-2/$input/.out.hs.sucess" ]; then
+                # Gennert and Negahdaripour
+                if [ ! -f "results/middlebury-2/$input/.out.gn.sucess" ]; then
                     python3 main.py $frame10 $frame11 --ground-truth=$ground_truth \
-                        --out=results/middlebury-2/$input/hs.flo --save-benchmark=results/middlebury-2/$input/hs.benchmark.txt \
-                        --save-reconstruction=results/middlebury-2/$input/hs.rec.png \
-                        --save-lum=results/middlebury-2/$input/hs.lum.png \
-                        --algo=HS --alpha=0.1 --lambda=0.2
-                    ./bin/color_flow results/middlebury-2/$input/hs.flo results/middlebury-2/$input/hs.png # $normalizing
-                    touch results/middlebury-2/$input/.out.hs.sucess
+                        --out=results/middlebury-2/$input/gn.flo --save-benchmark=results/middlebury-2/$input/gn.benchmark.txt \
+                        --save-reconstruction=results/middlebury-2/$input/gn.rec.png \
+                        --save-lum=results/middlebury-2/$input/gn.lum.png \
+                        --algo=GN --alpha=0.1 --lambda=0.2
+                    ./bin/color_flow results/middlebury-2/$input/gn.flo results/middlebury-2/$input/gn.png # $normalizing
+                    touch results/middlebury-2/$input/.out.gnhs.sucess
                 fi
 
                 # FOTO

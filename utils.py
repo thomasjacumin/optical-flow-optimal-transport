@@ -7,6 +7,8 @@ import cv2
 import csv
 import math
 import colorsys
+from scipy import sparse
+from scipy.sparse import bmat
 
 def vectorToColor(w, rhoMax):
   rho = np.sqrt(w[0]**2 + w[1]**2) / rhoMax
@@ -257,3 +259,46 @@ def AE(w, h, u, v, uGT, vGT):
 
 def IE(w, h, I, IGT):
     return np.sqrt ( np.sum( (255*I-255*IGT)**2 ) / (w*h) )
+
+def grad_x(w,h):
+  Av = []
+  Ax = []
+  Ay = []
+
+  for i in range(0,h):
+    for j in range(0,w):
+      n = i*w+j
+      if j <= w-2:
+        Ax.append(n)
+        Ay.append(n)
+        Av.append(-1)
+        #
+        Ax.append(n)
+        Ay.append(n+1)
+        Av.append(1)
+
+  return sparse.csr_matrix((Av, (Ax, Ay)), shape=[w*h, w*h])
+
+def grad_y(w,h):
+  Av = []
+  Ax = []
+  Ay = []
+
+  for i in range(0,h):
+    for j in range(0,w):
+      n = i*w+j
+      if i <= h-2:
+        Ax.append(n)
+        Ay.append(n)
+        Av.append(-1)
+        #
+        Ax.append(n)
+        Ay.append(n+w)
+        Av.append(1)
+
+  return sparse.csr_matrix((Av, (Ax, Ay)), shape=[w*h, w*h])
+
+def grad(w,h):
+  x = grad_x(w,h)
+  y = grad_y(w,h)
+  return  bmat([ [x], [y] ])

@@ -48,7 +48,7 @@ start_time = time.time()
 if args.algo == 'foto':
     mu, phi, q = benamou_brenier.solve(f1, f2, args.Nt, w, h, epsilon=args.epsilon, r=1.1)
     u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
-elif args.algo == 'HS':
+elif args.algo == 'GN':
     classical = classical.GLLOpticalFlow(w,h)
     classical.setAlpha(args.alpha)
     classical.setLambda(args.lambdaa)

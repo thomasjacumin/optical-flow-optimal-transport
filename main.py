@@ -21,6 +21,7 @@ parser.add_argument("--save-lum", nargs='?', help="file output of luminosity")
 parser.add_argument("--algo", nargs='?', help="Algorithm")
 parser.add_argument("--Nt", nargs='?', type=int, default=4, help="Discretization in time")
 parser.add_argument("--epsilon", nargs='?', type=float, default=0.1, help="Stopping threshold")
+parser.add_argument("--max-it", nargs='?', type=int, default=100, help="Maximal number of iteration")
 parser.add_argument("--normalize", action=argparse.BooleanOptionalAction, help="normalize the input images if enabled")
 parser.add_argument("--alpha", nargs='?', type=float, default=0.1, help="Horn-Schunck alpha")
 parser.add_argument("--lambdaa", nargs='?', type=float, default=0.2, help="Horn-Schunck lambda")
@@ -33,26 +34,47 @@ np.random.seed(0)
 f1, w, h = utils.openGrayscaleImage(args.f0)
 f2, w, h = utils.openGrayscaleImage(args.f1)
 
+#######################""
+r_x = int(w/4)
+r_y = int(h/4)
+L = 40
+for i in range(int(r_y-L/2), int(r_y+L/2)):
+    for j in range(int(r_x-L/2), int(r_x+L/2)):
+        f2[i+j*w] = f2[i+j*w]-0.2
+c_x = int(w/2)
+c_y = int(h/2)
+R = 30
+for i in range(0, h):
+    for j in range(0, w):
+        if (i-c_x)**2 + (j-c_y)**2 < R**2:
+            f2[i+j*w] = f2[i+j*w]+0.2
+f2 = np.clip(f2, 0, 1)
+Image.fromarray(np.uint8(255*f2.reshape([h,w])), 'L').save("results/f2.png")
+##############################################""
+
 print("***********************************")
 print("Input images: ")
 print(" - f0 = "+str(args.f0))
 print(" - f1 = "+str(args.f1))
 if args.normalize == True:
     print(" - normalize input images")
-    f1 = f1/(np.sum(f1)/(w*h))
-    f2 = f2/(np.sum(f2)/(w*h))
+    rho1 = f1/(np.sum(f1)/(w*h))
+    rho2 = f2/(np.sum(f2)/(w*h))
+else:
+    rho1 = f1
+    rho2 = f2
 
 # Start timer
 start_time = time.time()
 # Solve
 if args.algo == 'foto':
-    mu, phi, q = benamou_brenier.solve(f1, f2, args.Nt, w, h, epsilon=args.epsilon, r=1.1)
+    mu, phi, q = benamou_brenier.solve(rho1, rho2, args.Nt, w, h, epsilon=args.epsilon, r=1.1, max_it=args.max_it)
     u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
 elif args.algo == 'GN':
     classical = classical.GLLOpticalFlow(w,h)
     classical.setAlpha(args.alpha)
     classical.setLambda(args.lambdaa)
-    [u, v, m] = classical.assemble(f1, f2).process()
+    [u, v, m] = classical.assemble(rho1, rho2).process()
 else:
     assert("not implemented")
 # stop timer

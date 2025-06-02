@@ -33,7 +33,7 @@ def assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy):
     Iy = sparse.eye(Ny)
     It = sparse.eye(Nt)
 
-    L_space = sparse.kron(Ly, Ix) + sparse.kron(Iy, Lx)
+    L_space = sparse.kron(Iy, Lx) + sparse.kron(Ly, Ix)
     I_space = sparse.eye(Nx*Ny)
 
     L_st = sparse.kron(Lt, I_space) + sparse.kron(It, L_space)
@@ -94,70 +94,69 @@ def space_time_div(v, Nt, Nx, Ny, dt, dx, dy):
     return div
 
 
-# def space_time_div(mu, q, r, Nt, Nx, Ny, dt, dx, dy):
-#     """
-#     Compute discrete space-time divergence div_st(mu - r*q)
-#     Assume:
-#     - mu shape: (1, Nt*Nx*Ny)
-#     - q shape: (3, Nt*Nx*Ny), where q[0,:] = time component,
-#                                       q[1,:] = x component,
-#                                       q[2,:] = y component
-#     """
-#     div = np.zeros(Nt*Nx*Ny)
+def space_time_div(mu, q, r, Nt, Nx, Ny, dt, dx, dy):
+    """
+    Compute discrete space-time divergence div_st(mu - r*q)
+    Assume:
+    - mu shape: (1, Nt*Nx*Ny)
+    - q shape: (3, Nt*Nx*Ny), where q[0,:] = time component,
+                                      q[1,:] = x component,
+                                      q[2,:] = y component
+    """
+    div = np.zeros(Nt*Nx*Ny)
 
-#     # Extract flattened arrays for convenience
-#     mu_flat = mu[0]
-#     q_t = q[0]
-#     q_x = q[1]
-#     q_y = q[2]
+    # Extract flattened arrays for convenience
+    mu_flat = mu[0]
+    q_t = q[0]
+    q_x = q[1]
+    q_y = q[2]
 
-#     # Indices helper
-#     def idx(t, y, x):
-#         return t*Nx*Ny + y*Nx + x
+    # Indices helper
+    def idx(t, y, x):
+        return t*Nx*Ny + y*Nx + x
 
-#     # Time divergence (forward difference at t=0, backward at t=Nt-1, centered inside)
-#     for t in range(Nt):
-#         for y in range(Ny):
-#             for x in range(Nx):
-#                 i = idx(t,y,x)
-#                 if t == 0:
-#                     dt_div = (mu_flat[idx(t+1,y,x)] - mu_flat[i]) / dt
-#                 elif t == Nt-1:
-#                     dt_div = (mu_flat[i] - mu_flat[idx(t-1,y,x)]) / dt
-#                 else:
-#                     dt_div = (mu_flat[idx(t+1,y,x)] - mu_flat[idx(t-1,y,x)]) / (2*dt)
+    # Time divergence (forward difference at t=0, backward at t=Nt-1, centered inside)
+    for t in range(Nt):
+        for y in range(Ny):
+            for x in range(Nx):
+                i = idx(t,y,x)
+                if t == 0:
+                    dt_div = (mu_flat[idx(t+1,y,x)] - mu_flat[i]) / dt
+                elif t == Nt-1:
+                    dt_div = (mu_flat[i] - mu_flat[idx(t-1,y,x)]) / dt
+                else:
+                    dt_div = (mu_flat[idx(t+1,y,x)] - mu_flat[idx(t-1,y,x)]) / (2*dt)
 
-#                 # Space divergence (central differences with Neumann BC)
-#                 # x-direction
-#                 if x == 0:
-#                     dx_div = (q_x[idx(t,y,x+1)] - q_x[i]) / dx
-#                 elif x == Nx-1:
-#                     dx_div = (q_x[i] - q_x[idx(t,y,x-1)]) / dx
-#                 else:
-#                     dx_div = (q_x[idx(t,y,x+1)] - q_x[idx(t,y,x-1)]) / (2*dx)
+                # Space divergence (central differences with Neumann BC)
+                # x-direction
+                if x == 0:
+                    dx_div = (q_x[idx(t,y,x+1)] - q_x[i]) / dx
+                elif x == Nx-1:
+                    dx_div = (q_x[i] - q_x[idx(t,y,x-1)]) / dx
+                else:
+                    dx_div = (q_x[idx(t,y,x+1)] - q_x[idx(t,y,x-1)]) / (2*dx)
 
-#                 # y-direction
-#                 if y == 0:
-#                     dy_div = (q_y[idx(t,y+1,x)] - q_y[i]) / dy
-#                 elif y == Ny-1:
-#                     dy_div = (q_y[i] - q_y[idx(t,y-1,x)]) / dy
-#                 else:
-#                     dy_div = (q_y[idx(t,y+1,x)] - q_y[idx(t,y-1,x)]) / (2*dy)
+                # y-direction
+                if y == 0:
+                    dy_div = (q_y[idx(t,y+1,x)] - q_y[i]) / dy
+                elif y == Ny-1:
+                    dy_div = (q_y[i] - q_y[idx(t,y-1,x)]) / dy
+                else:
+                    dy_div = (q_y[idx(t,y+1,x)] - q_y[idx(t,y-1,x)]) / (2*dy)
 
-#                 div[i] = dt_div + dx_div + dy_div
+                div[i] = dt_div + dx_div + dy_div
 
-#     return div
+    return div
 
 def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, epsilon, Nt, Nx, Ny, dt, dx, dy):
     # Assemble operator
     L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
     I = sparse.eye(Nt*Nx*Ny)
 
-    A = -r * L_st + epsilon * I
+    A = r * L_st + epsilon * I # L_st = -Lap
 
     # Compute RHS: divergence term
-    # F = space_time_div(mu, q, r, Nt, Nx, Ny, dt, dx, dy)
-    F = spaceTimeDiv(mu-r*q, Nt, Nx, Ny, dt, dx, dy)
+    F = space_time_div(mu, q, r, Nt, Nx, Ny, dt, dx, dy)
 
     # Add non-homogeneous Neumann BC correction in time at t=0 and t=Nt-1
     idx_t0 = np.arange(Nx*Ny)
@@ -727,6 +726,25 @@ def stepA(mu, q, rho0, rhoT, r, Nt, Nx, Ny):
                 Ay.append(n*Nx*Ny+y*Nx+x)
                 Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2)
   A = sparse.csr_matrix((Av, (Ax, Ay)), shape=[Nt*Nx*Ny, Nt*Nx*Ny])
+
+# L = lap1d_neumann(N=100, dx=1.0/99)
+# print(np.allclose(L.toarray(), L.T.toarray()))  # Should be True
+
+
+
+# import numpy as np
+
+# u = np.random.rand(Nt * Nx * Ny)
+# v = np.random.rand(3, Nt * Nx * Ny)
+
+# grad_u = space_time_grad(u, Nt, Nx, Ny, dt, dx, dy)
+# div_v = space_time_div(v, Nt, Nx, Ny, dt, dx, dy)
+
+# lhs = np.sum(grad_u * v)
+# rhs = -np.sum(u * div_v)
+# print(f"Adjoint test error: {np.abs(lhs - rhs)}")
+# If that’s large (>1e-10), your discretizations are not compatible, and convergence will suffer or fail.
+
   return spsolve(A, F) 
 
 def stepB(p, Nt, Nx, Ny):

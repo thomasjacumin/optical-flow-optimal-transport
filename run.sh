@@ -59,7 +59,7 @@ run() {
                     --out=results/middlebury-1/$input/foto.flo --save-benchmark=results/middlebury-1/$input/foto.benchmark.txt \
                     --save-reconstruction=results/middlebury-1/$input/foto.rec.png \
                     --save-lum=results/middlebury-1/$input/foto.lum.png \
-                    --algo=foto --epsilon=0.1 --Nt=4 --max-it=200 --normalize
+                    --algo=foto --epsilon=0.5 --Nt=2 --max-it=200 --normalize
                 ./bin/color_flow results/middlebury-1/$input/foto.flo results/middlebury-1/$input/foto.png
                 touch results/middlebury-1/$input/.out.foto.sucess
             fi

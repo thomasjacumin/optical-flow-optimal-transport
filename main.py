@@ -34,23 +34,23 @@ np.random.seed(0)
 f1, w, h = utils.openGrayscaleImage(args.f0)
 f2, w, h = utils.openGrayscaleImage(args.f1)
 
-#######################""
-r_x = int(w/4)
-r_y = int(h/4)
-L = 40
-for i in range(int(r_y-L/2), int(r_y+L/2)):
-    for j in range(int(r_x-L/2), int(r_x+L/2)):
-        f2[i+j*w] = f2[i+j*w]-0.2
-c_x = int(w/2)
-c_y = int(h/2)
-R = 30
-for i in range(0, h):
-    for j in range(0, w):
-        if (i-c_x)**2 + (j-c_y)**2 < R**2:
-            f2[i+j*w] = f2[i+j*w]+0.2
-f2 = np.clip(f2, 0, 1)
-Image.fromarray(np.uint8(255*f2.reshape([h,w])), 'L').save("results/f2.png")
-##############################################""
+# #######################
+# r_x = int(w/4)
+# r_y = int(h/4)
+# L = 40
+# for i in range(int(r_y-L/2), int(r_y+L/2)):
+#     for j in range(int(r_x-L/2), int(r_x+L/2)):
+#         f2[i+j*w] = f2[i+j*w]-0.2
+# c_x = int(w/2)
+# c_y = int(h/2)
+# R = 30
+# for i in range(0, h):
+#     for j in range(0, w):
+#         if (i-c_x)**2 + (j-c_y)**2 < R**2:
+#             f2[i+j*w] = f2[i+j*w]+0.2
+# f2 = np.clip(f2, 0, 1)
+# Image.fromarray(np.uint8(255*f2.reshape([h,w])), 'L').save("results/f2.png")
+# ##############################################
 
 print("***********************************")
 print("Input images: ")
@@ -68,7 +68,7 @@ else:
 start_time = time.time()
 # Solve
 if args.algo == 'foto':
-    mu, phi, q = benamou_brenier.solve(rho1, rho2, args.Nt, w, h, epsilon=args.epsilon, r=1.1, max_it=args.max_it)
+    mu, phi, q = benamou_brenier.solve(rho1, rho2, args.Nt, w, h, r=1, convergence_tol=args.epsilon, reg_epsilon=1e-5, max_it=args.max_it)
     u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
 elif args.algo == 'GN':
     classical = classical.GLLOpticalFlow(w,h)

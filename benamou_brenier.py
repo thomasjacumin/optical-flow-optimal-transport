@@ -3,11 +3,7 @@ import matplotlib.pyplot as plt
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 
-dt = 1#./Nt
-dx = 1#./Nx
-dy = 1#./Ny
-
-def spaceTimeDiv(u, Nt, Nx, Ny):
+def spaceTimeDiv(u, Nt, Nx, Ny, dt, dx, dy):
   gradTU = np.zeros(Nt*Nx*Ny)
   for n in range(Nt):
     for y in range(Ny):
@@ -43,7 +39,7 @@ def spaceTimeDiv(u, Nt, Nx, Ny):
 
   return 1./dt*gradTU + 1./dx*gradXU + 1./dy*gradYU
 
-def spaceTimeGrad(u, Nt, Nx, Ny):
+def spaceTimeGrad(u, Nt, Nx, Ny, dt, dx, dy):
   gradTU = np.zeros(Nt*Nx*Ny)
   for n in range(Nt):
     for y in range(Ny):
@@ -79,495 +75,60 @@ def spaceTimeGrad(u, Nt, Nx, Ny):
 
   return np.array([1./dt*gradTU, 1./dx*gradXU, 1./dy*gradYU])
 
-def stepA(mu, q, rho0, rhoT, r, Nt, Nx, Ny):
-  epsilon = 0.001
+def lap1d_neumann(N, dx):
+    diagonals = [
+        np.ones(N-1),
+        -2 * np.ones(N),
+        np.ones(N-1)
+    ]
+    offsets = [-1, 0, 1]
+    L = sparse.diags(diagonals, offsets, shape=(N, N), format='lil')
+    L /= dx**2
 
-  spaceTimeDivSM = spaceTimeDiv(mu-r*q, Nt, Nx, Ny)
+    # Neumann BC: zero-flux at boundaries
+    L[0, 0] = -1 / dx**2
+    L[0, 1] = 1 / dx**2
+    L[-1, -1] = -1 / dx**2
+    L[-1, -2] = 1 / dx**2
 
-  F = np.zeros(Nt*Nx*Ny)
-  Av = []
-  Ax = []
-  Ay = []
-  for n in range(Nt):
-    for y in range(Ny):
-      for x in range(Nx):
-        # Not on boundaries (space and time)
-        if n>=1 and n<Nt-1 and y>=1 and y<Ny-1 and x>=1 and x<Nx-1:
-          # A[n*Nx*Ny+y*Nx+x, (n+1)*Nx*Ny+y*Nx+x] = -r*1./dt**2
-          Ax.append(n*Nx*Ny+y*Nx+x)
-          Ay.append((n+1)*Nx*Ny+y*Nx+x)
-          Av.append(-r*1./dt**2)
-          # A[n*Nx*Ny+y*Nx+x, (n-1)*Nx*Ny+y*Nx+x] = -r*1./dt**2
-          Ax.append(n*Nx*Ny+y*Nx+x)
-          Ay.append((n-1)*Nx*Ny+y*Nx+x)
-          Av.append(-r*1./dt**2)
-          # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-          Ax.append(n*Nx*Ny+y*Nx+x)
-          Ay.append(n*Nx*Ny+y*Nx+x+1)
-          Av.append(-r*1./dx**2)
-          # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-          Ax.append(n*Nx*Ny+y*Nx+x)
-          Ay.append(n*Nx*Ny+y*Nx+x-1)
-          Av.append(-r*1./dx**2)
-          # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-          Ax.append(n*Nx*Ny+y*Nx+x)
-          Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-          Av.append(-r*1./dy**2)
-          # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-          Ax.append(n*Nx*Ny+y*Nx+x)
-          Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-          Av.append(-r*1./dy**2)
-          # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon
-          Ax.append(n*Nx*Ny+y*Nx+x)
-          Ay.append(n*Nx*Ny+y*Nx+x)
-          Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon)
+    return L.tocsr()
 
-          F[n*Nx*Ny+y*Nx+x] = spaceTimeDivSM[n*Nx*Ny+y*Nx+x]
-        else:
-          # Neumann in time
-          if n == 0:
-            # A[n*Nx*Ny+y*Nx+x, (n+1)*Nx*Ny+y*Nx+x] = -r*1./dt**2
-            Ax.append(n*Nx*Ny+y*Nx+x)
-            Ay.append((n+1)*Nx*Ny+y*Nx+x)
-            Av.append(-r*1./dt**2)
+def assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy):
+    Lx = lap1d_neumann(Nx, dx)
+    Ly = lap1d_neumann(Ny, dy)
+    Lt = lap1d_neumann(Nt, dt)
+    Ix = sparse.eye(Nx)
+    Iy = sparse.eye(Ny)
+    It = sparse.eye(Nt)
 
-            F[n*Nx*Ny+y*Nx+x] = spaceTimeDivSM[n*Nx*Ny+y*Nx+x] - 1/dt*(rho0[y*Nx+x]-mu[0,(0)*Nx*Ny+y*Nx+x]+r*q[0,(0)*Nx*Ny+y*Nx+x])
+    L_space = sparse.kron(Iy, Lx) + sparse.kron(Ly, Ix)
+    I_space = sparse.eye(Nx*Ny)
 
-            # Not on space boundaries
-            if y>=1 and y<Ny-1 and x>=1 and x<Nx-1:
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+y*Nx+x+1)
-              Av.append(-r*1./dx**2)
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+y*Nx+x-1)
-              Av.append(-r*1./dx**2)
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-              Av.append(-r*1./dy**2)
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-              Av.append(-r*1./dy**2)
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon +r*1./dt**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+y*Nx+x)
-              Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon - r*1./dt**2)
-            else:
-              if x == 0:
-                if y == 0: # top-left corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2-r*1./dx**2 +r*1./dt**2 -r*1./dx**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2 -r*1./dx**2-r*1./dy**2) 
-                elif y == Ny-1: # bottom-left corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2 -r*1./dx**2 +r*1./dt**2-r*1./dx**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dx**2-r*1./dy**2)
-                else: # on left but not on corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dx**2+r*1./dt**2-r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dt**2-r*1./dx**2)
-              elif x == Nx-1:
-                if y == 0: # top-right corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dx**2 -r*1./dy**2+r*1./dt**2-r*1./dx**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dt**2-r*1./dx**2-r*1./dy**2)
-                elif y == Ny-1: # bottom-right corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dx**2 -r*1./dy**2+r*1./dt**2-r*1./dx**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dx**2-r*1./dy**2)
-                else: # on right but not on corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dx**2+r*1./dt**2-r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dx**2)
-              else:
-                if y == 0: # on top but not on corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2+r*1./dt**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dt**2-r*1./dy**2)
-                elif y == Ny-1: # on bottom but not on corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2+r*1./dt**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dy**2)
-          elif n == Nt-1:
-            # A[n*Nx*Ny+y*Nx+x, (n-1)*Nx*Ny+y*Nx+x] = -r*1./dt**2
-            Ax.append(n*Nx*Ny+y*Nx+x)
-            Ay.append((n-1)*Nx*Ny+y*Nx+x)
-            Av.append(-r*1./dt**2)
+    L_st = sparse.kron(Lt, I_space) + sparse.kron(It, L_space)
+    return L_st
 
-            F[n*Nx*Ny+y*Nx+x] = spaceTimeDivSM[n*Nx*Ny+y*Nx+x ] + 1/dt*(rhoT[y*Nx+x]-mu[0,(Nt-1)*Nx*Ny+y*Nx+x]+r*q[0,(Nt-1)*Nx*Ny+y*Nx+x])
-            # Not on space boundaries
-            if y>=1 and y<Ny-1 and x>=1 and x<Nx-1:
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+y*Nx+x+1)
-              Av.append(-r*1./dx**2)
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+y*Nx+x-1)
-              Av.append(-r*1./dx**2)
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-              Av.append(-r*1./dy**2)
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-              Av.append(-r*1./dy**2)
-              # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon +r*1./dt**2
-              Ax.append(n*Nx*Ny+y*Nx+x)
-              Ay.append(n*Nx*Ny+y*Nx+x)
-              Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2)
-            else:
-              if x == 0:
-                if y == 0: # top-left corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dx**2-r*1./dy**2+r*1./dt**2-r*1./dy**2-r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dy**2-r*1./dx**2)
-                elif y == Ny-1: # bottom-left corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dx**2 -r*1./dy**2+r*1./dt**2-r*1./dy**2-r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dt**2-r*1./dy**2-r*1./dx**2)
-                else: # on left but not on corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dx**2 +r*1./dt**2-r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dx**2)
-              elif x == Nx-1:
-                if y == 0: # top-right corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2 -r*1./dx**2+r*1./dt**2-r*1./dx**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dx**2-r*1./dy**2)
-                elif y == Ny-1: # bottom-right corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2 -r*1./dx**2+r*1./dt**2-r*1./dy**2-r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dy**2-r*1./dx**2)
-                else: # on right but not on corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dx**2 +r*1./dt**2-r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dx**2)
-              else:
-                if y == 0: # on top but not on corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2 +r*1./dt**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dy**2)
-                elif y == Ny-1: # on bottom but not on corner
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x+1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x-1)
-                  Av.append(-r*1./dx**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                  Av.append(-r*1./dy**2)
-                  # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2 +r*1./dt**2-r*1./dy**2
-                  Ax.append(n*Nx*Ny+y*Nx+x)
-                  Ay.append(n*Nx*Ny+y*Nx+x)
-                  Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dt**2-r*1./dy**2)
-          else:
-            # not on time boundaries
-            F[n*Nx*Ny+y*Nx+x] = spaceTimeDivSM[n*Nx*Ny+y*Nx+x]
-            # A[n*Nx*Ny+y*Nx+x, (n+1)*Nx*Ny+y*Nx+x] = -r*1./dt**2
-            Ax.append(n*Nx*Ny+y*Nx+x)
-            Ay.append((n+1)*Nx*Ny+y*Nx+x)
-            Av.append(-r*1./dt**2)
-            # A[n*Nx*Ny+y*Nx+x, (n-1)*Nx*Ny+y*Nx+x] = -r*1./dt**2
-            Ax.append(n*Nx*Ny+y*Nx+x)
-            Ay.append((n-1)*Nx*Ny+y*Nx+x)
-            Av.append(-r*1./dt**2)
-            if x == 0:
-              if y == 0: # top-left corner
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x+1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2-r*1./dx**2-r*1./dx**2-r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x)
-                Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dx**2-r*1./dy**2)
-              elif y == Ny-1: # bottom-left corner
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x+1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2 -r*1./dx**2-r*1./dy**2-r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x)
-                Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2-r*1./dx**2)
-              else: # on left but not on corner
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x+1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dx**2-r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x)
-                Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dx**2)
-            elif x == Nx-1:
-              if y == 0: # top-right corner
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x-1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2 -r*1./dx**2-r*1./dx**2-r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x)
-                Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dx**2-r*1./dy**2)
-              elif y == Ny-1: # bottom-right corner
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x-1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2 -r*1./dx**2-r*1./dy**2-r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x)
-                Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2-r*1./dx**2)
-              else: # on right but not on corner
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x-1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dx**2-r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x)
-                Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dx**2)
-            else:
-              if y == 0: # on top but not on corner
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x+1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x-1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y+1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y+1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2-r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x)
-                Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2)
-              elif y == Ny-1: # on bottom but not on corner
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x+1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x+1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x-1] = -r*1./dx**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x-1)
-                Av.append(-r*1./dx**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+(y-1)*Nx+x] = -r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+(y-1)*Nx+x)
-                Av.append(-r*1./dy**2)
-                # A[n*Nx*Ny+y*Nx+x, n*Nx*Ny+y*Nx+x] = -r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon -r*1./dy**2-r*1./dy**2
-                Ax.append(n*Nx*Ny+y*Nx+x)
-                Ay.append(n*Nx*Ny+y*Nx+x)
-                Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2)
-  A = sparse.csr_matrix((Av, (Ax, Ay)), shape=[Nt*Nx*Ny, Nt*Nx*Ny])
-  return spsolve(A, F) 
+def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, epsilon, Nt, Nx, Ny, dt, dx, dy):
+    # Assemble operator
+    L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
+    I = sparse.eye(Nt*Nx*Ny)
+
+    A = -r * L_st + epsilon * I
+
+    # Compute RHS: divergence term
+    F = spaceTimeDiv(mu-r*q, Nt, Nx, Ny, dt, dx, dy)
+
+    # Add non-homogeneous Neumann BC correction in time at t=0 and t=Nt-1
+    idx_t0 = np.arange(Nx*Ny)
+    g0 = -(rho0 - mu[0, 0:Nx*Ny] + r * q[0, 0:Nx*Ny])
+    F[idx_t0] += 1/dt * g0
+
+    idx_tN = np.arange(Nx*Ny) + (Nt-1)*Nx*Ny
+    gN = (rhoT - mu[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny] + r * q[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny])
+    F[idx_tN] += 1/dt * gN
+
+    u = spsolve(A, F)
+
+    return u
 
 def stepB(p, Nt, Nx, Ny):
   a = np.zeros(Nt*Nx*Ny)
@@ -607,25 +168,38 @@ def stepB(p, Nt, Nx, Ny):
       b2[i] = beta2H
   return np.array([a, b1, b2])
 
-def solve(rho0, rhoT, Nt, Nx, Ny, r=1, epsilon=0.3, max_it=100):    
+def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, max_it=100):
+    dt = 1
+    dx = 1
+    dy = 1
+
     qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
     mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] m\to \R^2
-    
+    crit = -1
     for i in range(0,max_it):
-      phi = stepA(mu, qPrev, rho0, rhoT, r, Nt, Nx, Ny)
+      phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, reg_epsilon, Nt, Nx, Ny, dt, dx, dy)
     
-      spaceTimeGradPhi = spaceTimeGrad(phi, Nt, Nx, Ny)
-      q = stepB(spaceTimeGradPhi + 1./r*mu, Nt, Nx, Ny)
+      gradPhi = spaceTimeGrad(phi, Nt, Nx, Ny, dt, dx, dy)
+      q = stepB(gradPhi + (1./r)*mu, Nt, Nx, Ny)
       # stepC
-      muNext = mu + r*( spaceTimeGradPhi - q )
+      muNext = mu + r*( gradPhi - q )
+      mu[0,:] = np.maximum(mu[0,:], 1e-10)  # Ensure positivity
     
       qPrev = q
       mu = muNext
-    
-      res = spaceTimeGradPhi[0,:] + 0.5*(np.power(spaceTimeGradPhi[1,:], 2) + np.power(spaceTimeGradPhi[2,:], 2) )
-      crit = np.sqrt( np.sum( np.multiply(mu[0,:], np.abs(res))) / np.sum( np.multiply(mu[0,:], np.power(spaceTimeGradPhi[1,:], 2) + np.power(spaceTimeGradPhi[2,:], 2) )) )
+
+      res = gradPhi[0,:] + 0.5 * (gradPhi[1,:]**2 + gradPhi[2,:]**2)
+      num = np.sum(mu[0,:] * np.abs(res))
+      denom = np.sum(mu[0,:] * (gradPhi[1,:]**2 + gradPhi[2,:]**2))
+
+      prev_crit = crit
+      crit = np.sqrt(num / (denom + 1e-10))  # prevent zero division
       print(str(crit)+" ("+str(i+1)+"/"+str(max_it)+")")
     
-      if crit <= epsilon:
+      if crit <= convergence_tol:
         break
+      if prev_crit >= 0:
+        if np.abs(prev_crit - crit) < 1e-5:
+          break
+
     return mu, phi, q

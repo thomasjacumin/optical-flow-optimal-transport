@@ -42,16 +42,16 @@ run() {
 
             mkdir results/middlebury-1/$input
 
-            # # Gennert and Negahdaripour
-            # if [ ! -f "results/middlebury-1/$input/.out.gn.sucess" ]; then
-            #     python3 main.py $frame10 $frame11 \
-            #         --out=results/middlebury-1/$input/gn.flo --save-benchmark=results/middlebury-1/$input/gn.benchmark.txt \
-            #         --save-reconstruction=results/middlebury-1/$input/gn.rec.png \
-            #         --save-lum=results/middlebury-1/$input/gn.lum.png \
-            #         --algo=GN --alpha=0.1 --lambda=0.2 --normalize
-            #     ./bin/color_flow results/middlebury-1/$input/gn.flo results/middlebury-1/$input/gn.png
-            #     touch results/middlebury-1/$input/.out.gn.sucess
-            # fi
+            # Gennert and Negahdaripour
+            if [ ! -f "results/middlebury-1/$input/.out.gn.sucess" ]; then
+                python3 main.py $frame10 $frame11 \
+                    --out=results/middlebury-1/$input/gn.flo --save-benchmark=results/middlebury-1/$input/gn.benchmark.txt \
+                    --save-reconstruction=results/middlebury-1/$input/gn.rec.png \
+                    --save-lum=results/middlebury-1/$input/gn.lum.png \
+                    --algo=GN --alpha=0.1 --lambda=0.2 --normalize
+                ./bin/color_flow results/middlebury-1/$input/gn.flo results/middlebury-1/$input/gn.png
+                touch results/middlebury-1/$input/.out.gn.sucess
+            fi
 
             # FOTO
             if [ ! -f "results/middlebury-1/$input/.out.foto.sucess" ]; then
@@ -59,7 +59,7 @@ run() {
                     --out=results/middlebury-1/$input/foto.flo --save-benchmark=results/middlebury-1/$input/foto.benchmark.txt \
                     --save-reconstruction=results/middlebury-1/$input/foto.rec.png \
                     --save-lum=results/middlebury-1/$input/foto.lum.png \
-                    --algo=foto --epsilon=0.5 --Nt=2 --max-it=200 --normalize
+                    --algo=foto --epsilon=0.01 --Nt=16 --max-it=400 --normalize
                 ./bin/color_flow results/middlebury-1/$input/foto.flo results/middlebury-1/$input/foto.png
                 touch results/middlebury-1/$input/.out.foto.sucess
             fi

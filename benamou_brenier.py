@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import sparse
-from scipy.sparse.linalg import spsolve
+from scipy.sparse.linalg import spsolve, cg
 
 def spaceTimeDiv(u, Nt, Nx, Ny, dt, dx, dy):
   gradTU = np.zeros(Nt*Nx*Ny)
@@ -107,13 +107,7 @@ def assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy):
     L_st = sparse.kron(Lt, I_space) + sparse.kron(It, L_space)
     return L_st
 
-def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, epsilon, Nt, Nx, Ny, dt, dx, dy):
-    # Assemble operator
-    L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
-    I = sparse.eye(Nt*Nx*Ny)
-
-    A = -r * L_st + epsilon * I
-
+def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy):
     # Compute RHS: divergence term
     F = spaceTimeDiv(mu-r*q, Nt, Nx, Ny, dt, dx, dy)
 
@@ -126,7 +120,8 @@ def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, epsilon, Nt, Nx, Ny, dt, dx
     gN = (rhoT - mu[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny] + r * q[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny])
     F[idx_tN] += 1/dt * gN
 
-    u = spsolve(A, F)
+    # u = spsolve(A, F)
+    u, info = cg(A, F, rtol=1e-6, maxiter=1000)
 
     return u
 
@@ -176,8 +171,12 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
     qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
     mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] m\to \R^2
     crit = -1
+    # Assemble operator
+    L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
+    I = sparse.eye(Nt*Nx*Ny)
+    A = -r * L_st + reg_epsilon * I
     for i in range(0,max_it):
-      phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, reg_epsilon, Nt, Nx, Ny, dt, dx, dy)
+      phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy)
     
       gradPhi = spaceTimeGrad(phi, Nt, Nx, Ny, dt, dx, dy)
       q = stepB(gradPhi + (1./r)*mu, Nt, Nx, Ny)

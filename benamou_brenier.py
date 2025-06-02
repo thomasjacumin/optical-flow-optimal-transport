@@ -3,10 +3,6 @@ import matplotlib.pyplot as plt
 from scipy import sparse
 from scipy.sparse.linalg import spsolve, cg
 
-dt = 1#./Nt
-dx = 1#./Nx
-dy = 1#./Ny
-
 def lap1d_neumann(N, dx):
     diagonals = [
         np.ones(N-1),
@@ -39,133 +35,135 @@ def assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy):
     L_st = sparse.kron(Lt, I_space) + sparse.kron(It, L_space)
     return L_st
 
-def space_time_div(v, Nt, Nx, Ny, dt, dx, dy):
-    """
-    Compute discrete divergence of a space-time vector field v = [v_t, v_x, v_y].
+# def space_time_div(v, Nt, Nx, Ny, dt, dx, dy):
+#     """
+#     Compute discrete divergence of a space-time vector field v = [v_t, v_x, v_y].
 
-    Parameters:
-        v : np.array, shape (3, Nt*Nx*Ny)
-            Vector field components [time, x, y], each flattened.
-        Nt, Nx, Ny : int
-            Number of points in time and spatial dimensions.
-        dt, dx, dy : float
-            Grid spacings.
+#     Parameters:
+#         v : np.array, shape (3, Nt*Nx*Ny)
+#             Vector field components [time, x, y], each flattened.
+#         Nt, Nx, Ny : int
+#             Number of points in time and spatial dimensions.
+#         dt, dx, dy : float
+#             Grid spacings.
 
-    Returns:
-        div : np.array, shape (Nt*Nx*Ny,)
-            Flattened scalar field of divergence at each point.
-    """
-    div = np.zeros(Nt*Nx*Ny)
+#     Returns:
+#         div : np.array, shape (Nt*Nx*Ny,)
+#             Flattened scalar field of divergence at each point.
+#     """
+#     div = np.zeros(Nt*Nx*Ny)
 
-    v_t, v_x, v_y = v
+#     v_t, v_x, v_y = v
 
-    def idx(t, y, x):
-        return t*Nx*Ny + y*Nx + x
+#     def idx(t, y, x):
+#         return t*Nx*Ny + y*Nx + x
 
-    for t in range(Nt):
-        for y in range(Ny):
-            for x in range(Nx):
-                i = idx(t, y, x)
+#     for t in range(Nt):
+#         for y in range(Ny):
+#             for x in range(Nx):
+#                 i = idx(t, y, x)
 
-                # Time divergence (backward difference adjoint to forward gradient)
-                if t == 0:
-                    div[i] += -v_t[idx(t,y,x)] / dt
-                elif t == Nt-1:
-                    div[i] += v_t[idx(t-1,y,x)] / dt
-                else:
-                    div[i] += (v_t[idx(t-1,y,x)] - v_t[idx(t,y,x)]) / (2*dt)
+#                 # Time divergence (backward difference adjoint to forward gradient)
+#                 if t == 0:
+#                     div[i] += -v_t[idx(t,y,x)] / dt
+#                 elif t == Nt-1:
+#                     div[i] += v_t[idx(t-1,y,x)] / dt
+#                 else:
+#                     div[i] += (v_t[idx(t-1,y,x)] - v_t[idx(t,y,x)]) / (2*dt)
 
-                # X divergence
-                if x == 0:
-                    div[i] += -v_x[idx(t,y,x)] / dx
-                elif x == Nx-1:
-                    div[i] += v_x[idx(t,y,x-1)] / dx
-                else:
-                    div[i] += (v_x[idx(t,y,x-1)] - v_x[idx(t,y,x+1)]) / (2*dx)
+#                 # X divergence
+#                 if x == 0:
+#                     div[i] += -v_x[idx(t,y,x)] / dx
+#                 elif x == Nx-1:
+#                     div[i] += v_x[idx(t,y,x-1)] / dx
+#                 else:
+#                     div[i] += (v_x[idx(t,y,x-1)] - v_x[idx(t,y,x+1)]) / (2*dx)
 
-                # Y divergence
-                if y == 0:
-                    div[i] += -v_y[idx(t,y,x)] / dy
-                elif y == Ny-1:
-                    div[i] += v_y[idx(t,y-1,x)] / dy
-                else:
-                    div[i] += (v_y[idx(t,y-1,x)] - v_y[idx(t,y+1,x)]) / (2*dy)
+#                 # Y divergence
+#                 if y == 0:
+#                     div[i] += -v_y[idx(t,y,x)] / dy
+#                 elif y == Ny-1:
+#                     div[i] += v_y[idx(t,y-1,x)] / dy
+#                 else:
+#                     div[i] += (v_y[idx(t,y-1,x)] - v_y[idx(t,y+1,x)]) / (2*dy)
 
-    return div
+#     return div
 
 
-def space_time_div(mu, q, r, Nt, Nx, Ny, dt, dx, dy):
-    """
-    Compute discrete space-time divergence div_st(mu - r*q)
-    Assume:
-    - mu shape: (1, Nt*Nx*Ny)
-    - q shape: (3, Nt*Nx*Ny), where q[0,:] = time component,
-                                      q[1,:] = x component,
-                                      q[2,:] = y component
-    """
-    div = np.zeros(Nt*Nx*Ny)
+# def space_time_div(mu, q, r, Nt, Nx, Ny, dt, dx, dy):
+#     """
+#     Compute discrete space-time divergence div_st(mu - r*q)
+#     Assume:
+#     - mu shape: (1, Nt*Nx*Ny)
+#     - q shape: (3, Nt*Nx*Ny), where q[0,:] = time component,
+#                                       q[1,:] = x component,
+#                                       q[2,:] = y component
+#     """
+#     div = np.zeros(Nt*Nx*Ny)
 
-    # Extract flattened arrays for convenience
-    mu_flat = mu[0]
-    q_t = q[0]
-    q_x = q[1]
-    q_y = q[2]
+#     # Extract flattened arrays for convenience
+#     mu_flat = mu[0]
+#     q_t = q[0]
+#     q_x = q[1]
+#     q_y = q[2]
 
-    # Indices helper
-    def idx(t, y, x):
-        return t*Nx*Ny + y*Nx + x
+#     # Indices helper
+#     def idx(t, y, x):
+#         return t*Nx*Ny + y*Nx + x
 
-    # Time divergence (forward difference at t=0, backward at t=Nt-1, centered inside)
-    for t in range(Nt):
-        for y in range(Ny):
-            for x in range(Nx):
-                i = idx(t,y,x)
-                if t == 0:
-                    dt_div = (mu_flat[idx(t+1,y,x)] - mu_flat[i]) / dt
-                elif t == Nt-1:
-                    dt_div = (mu_flat[i] - mu_flat[idx(t-1,y,x)]) / dt
-                else:
-                    dt_div = (mu_flat[idx(t+1,y,x)] - mu_flat[idx(t-1,y,x)]) / (2*dt)
+#     # Time divergence (forward difference at t=0, backward at t=Nt-1, centered inside)
+#     for t in range(Nt):
+#         for y in range(Ny):
+#             for x in range(Nx):
+#                 i = idx(t,y,x)
+#                 if t == 0:
+#                     dt_div = (mu_flat[idx(t+1,y,x)] - mu_flat[i]) / dt
+#                 elif t == Nt-1:
+#                     dt_div = (mu_flat[i] - mu_flat[idx(t-1,y,x)]) / dt
+#                 else:
+#                     dt_div = (mu_flat[idx(t+1,y,x)] - mu_flat[idx(t-1,y,x)]) / (2*dt)
 
-                # Space divergence (central differences with Neumann BC)
-                # x-direction
-                if x == 0:
-                    dx_div = (q_x[idx(t,y,x+1)] - q_x[i]) / dx
-                elif x == Nx-1:
-                    dx_div = (q_x[i] - q_x[idx(t,y,x-1)]) / dx
-                else:
-                    dx_div = (q_x[idx(t,y,x+1)] - q_x[idx(t,y,x-1)]) / (2*dx)
+#                 # Space divergence (central differences with Neumann BC)
+#                 # x-direction
+#                 if x == 0:
+#                     dx_div = (q_x[idx(t,y,x+1)] - q_x[i]) / dx
+#                 elif x == Nx-1:
+#                     dx_div = (q_x[i] - q_x[idx(t,y,x-1)]) / dx
+#                 else:
+#                     dx_div = (q_x[idx(t,y,x+1)] - q_x[idx(t,y,x-1)]) / (2*dx)
 
-                # y-direction
-                if y == 0:
-                    dy_div = (q_y[idx(t,y+1,x)] - q_y[i]) / dy
-                elif y == Ny-1:
-                    dy_div = (q_y[i] - q_y[idx(t,y-1,x)]) / dy
-                else:
-                    dy_div = (q_y[idx(t,y+1,x)] - q_y[idx(t,y-1,x)]) / (2*dy)
+#                 # y-direction
+#                 if y == 0:
+#                     dy_div = (q_y[idx(t,y+1,x)] - q_y[i]) / dy
+#                 elif y == Ny-1:
+#                     dy_div = (q_y[i] - q_y[idx(t,y-1,x)]) / dy
+#                 else:
+#                     dy_div = (q_y[idx(t,y+1,x)] - q_y[idx(t,y-1,x)]) / (2*dy)
 
-                div[i] = dt_div + dx_div + dy_div
+#                 div[i] = dt_div + dx_div + dy_div
 
-    return div
+#     return div
 
 def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, epsilon, Nt, Nx, Ny, dt, dx, dy):
-    # Assemble operator
-    L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
-    I = sparse.eye(Nt*Nx*Ny)
+    # # Assemble operator
+    # L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
+    # I = sparse.eye(Nt*Nx*Ny)
 
-    A = r * L_st + epsilon * I # L_st = -Lap
+    # A = r * L_st + epsilon * I # L_st = -Lap
 
-    # Compute RHS: divergence term
-    F = space_time_div(mu, q, r, Nt, Nx, Ny, dt, dx, dy)
+    A, F = stepA(mu, q, rho0, rhoT, r, Nt, Nx, Ny, dt, dx, dy)
 
-    # Add non-homogeneous Neumann BC correction in time at t=0 and t=Nt-1
-    idx_t0 = np.arange(Nx*Ny)
-    g0 = (rho0 - mu[0, 0:Nx*Ny] + r * q[0, 0:Nx*Ny]) / r
-    F[idx_t0] += dt * g0
+    # # Compute RHS: divergence term
+    # F = space_time_div(mu, q, r, Nt, Nx, Ny, dt, dx, dy)
 
-    idx_tN = np.arange(Nx*Ny) + (Nt-1)*Nx*Ny
-    gN = (rhoT - mu[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny] + r * q[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny]) / r
-    F[idx_tN] += dt * gN
+    # # Add non-homogeneous Neumann BC correction in time at t=0 and t=Nt-1
+    # idx_t0 = np.arange(Nx*Ny)
+    # g0 = (rho0 - mu[0, 0:Nx*Ny] + r * q[0, 0:Nx*Ny]) / r
+    # F[idx_t0] += dt * g0
+
+    # idx_tN = np.arange(Nx*Ny) + (Nt-1)*Nx*Ny
+    # gN = (rhoT - mu[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny] + r * q[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny]) / r
+    # F[idx_tN] += dt * gN
 
     u = spsolve(A, F)
     # u, info = cg(A, F, rtol=1e-6, maxiter=1000)
@@ -206,7 +204,7 @@ def spaceTimeDiv(u, Nt, Nx, Ny, dt, dx, dy):
 
   return 1./dt*gradTU + 1./dx*gradXU + 1./dy*gradYU
 
-def spaceTimeGrad(u, Nt, Nx, Ny):
+def spaceTimeGrad(u, Nt, Nx, Ny, dt, dx, dy):
   gradTU = np.zeros(Nt*Nx*Ny)
   for n in range(Nt):
     for y in range(Ny):
@@ -238,10 +236,10 @@ def spaceTimeGrad(u, Nt, Nx, Ny):
 
   return np.array([1./dt*gradTU, 1./dx*gradXU, 1./dy*gradYU])
 
-def stepA(mu, q, rho0, rhoT, r, Nt, Nx, Ny):
+def stepA(mu, q, rho0, rhoT, r, Nt, Nx, Ny, dt, dx, dy):
   epsilon = 0.001
 
-  spaceTimeDivSM = spaceTimeDiv(mu-r*q, Nt, Nx, Ny)
+  spaceTimeDivSM = spaceTimeDiv(mu-r*q, Nt, Nx, Ny, dt, dx, dy)
 
   F = np.zeros(Nt*Nx*Ny)
   Av = []
@@ -726,26 +724,7 @@ def stepA(mu, q, rho0, rhoT, r, Nt, Nx, Ny):
                 Ay.append(n*Nx*Ny+y*Nx+x)
                 Av.append(-r*(-2./dt**2 - 2./dx**2 - 2./dy**2) + r*epsilon-r*1./dy**2)
   A = sparse.csr_matrix((Av, (Ax, Ay)), shape=[Nt*Nx*Ny, Nt*Nx*Ny])
-
-# L = lap1d_neumann(N=100, dx=1.0/99)
-# print(np.allclose(L.toarray(), L.T.toarray()))  # Should be True
-
-
-
-# import numpy as np
-
-# u = np.random.rand(Nt * Nx * Ny)
-# v = np.random.rand(3, Nt * Nx * Ny)
-
-# grad_u = space_time_grad(u, Nt, Nx, Ny, dt, dx, dy)
-# div_v = space_time_div(v, Nt, Nx, Ny, dt, dx, dy)
-
-# lhs = np.sum(grad_u * v)
-# rhs = -np.sum(u * div_v)
-# print(f"Adjoint test error: {np.abs(lhs - rhs)}")
-# If that’s large (>1e-10), your discretizations are not compatible, and convergence will suffer or fail.
-
-  return spsolve(A, F) 
+  return A, F
 
 def stepB(p, Nt, Nx, Ny):
   a = np.zeros(Nt*Nx*Ny)
@@ -785,59 +764,59 @@ def stepB(p, Nt, Nx, Ny):
       b2[i] = beta2H
   return np.array([a, b1, b2])
 
-def space_time_grad(u, Nt, Nx, Ny, dt, dx, dy):
-    """
-    Compute discrete gradient of u(t,y,x) with Neumann BCs.
+# def space_time_grad(u, Nt, Nx, Ny, dt, dx, dy):
+#     """
+#     Compute discrete gradient of u(t,y,x) with Neumann BCs.
 
-    Parameters:
-        u : array, shape (Nt*Nx*Ny,)
-            Flattened scalar field on space-time grid.
-        Nt, Nx, Ny : int
-            Number of points in time and spatial dimensions.
-        dt, dx, dy : float
-            Grid spacings.
+#     Parameters:
+#         u : array, shape (Nt*Nx*Ny,)
+#             Flattened scalar field on space-time grid.
+#         Nt, Nx, Ny : int
+#             Number of points in time and spatial dimensions.
+#         dt, dx, dy : float
+#             Grid spacings.
 
-    Returns:
-        grad : np.array, shape (3, Nt*Nx*Ny)
-            Gradient components [time, x, y] each flattened.
-    """
-    grad_t = np.zeros_like(u)
-    grad_x = np.zeros_like(u)
-    grad_y = np.zeros_like(u)
+#     Returns:
+#         grad : np.array, shape (3, Nt*Nx*Ny)
+#             Gradient components [time, x, y] each flattened.
+#     """
+#     grad_t = np.zeros_like(u)
+#     grad_x = np.zeros_like(u)
+#     grad_y = np.zeros_like(u)
 
-    def idx(t, y, x):
-        return t*Nx*Ny + y*Nx + x
+#     def idx(t, y, x):
+#         return t*Nx*Ny + y*Nx + x
 
-    for t in range(Nt):
-        for y in range(Ny):
-            for x in range(Nx):
-                i = idx(t,y,x)
+#     for t in range(Nt):
+#         for y in range(Ny):
+#             for x in range(Nx):
+#                 i = idx(t,y,x)
 
-                # Time gradient
-                if t == 0:
-                    grad_t[i] = (u[idx(t+1,y,x)] - u[i]) / dt
-                elif t == Nt-1:
-                    grad_t[i] = (u[i] - u[idx(t-1,y,x)]) / dt
-                else:
-                    grad_t[i] = (u[idx(t+1,y,x)] - u[idx(t-1,y,x)]) / (2*dt)
+#                 # Time gradient
+#                 if t == 0:
+#                     grad_t[i] = (u[idx(t+1,y,x)] - u[i]) / dt
+#                 elif t == Nt-1:
+#                     grad_t[i] = (u[i] - u[idx(t-1,y,x)]) / dt
+#                 else:
+#                     grad_t[i] = (u[idx(t+1,y,x)] - u[idx(t-1,y,x)]) / (2*dt)
 
-                # X gradient
-                if x == 0:
-                    grad_x[i] = (u[idx(t,y,x+1)] - u[i]) / dx
-                elif x == Nx-1:
-                    grad_x[i] = (u[i] - u[idx(t,y,x-1)]) / dx
-                else:
-                    grad_x[i] = (u[idx(t,y,x+1)] - u[idx(t,y,x-1)]) / (2*dx)
+#                 # X gradient
+#                 if x == 0:
+#                     grad_x[i] = (u[idx(t,y,x+1)] - u[i]) / dx
+#                 elif x == Nx-1:
+#                     grad_x[i] = (u[i] - u[idx(t,y,x-1)]) / dx
+#                 else:
+#                     grad_x[i] = (u[idx(t,y,x+1)] - u[idx(t,y,x-1)]) / (2*dx)
 
-                # Y gradient
-                if y == 0:
-                    grad_y[i] = (u[idx(t,y+1,x)] - u[i]) / dy
-                elif y == Ny-1:
-                    grad_y[i] = (u[i] - u[idx(t,y-1,x)]) / dy
-                else:
-                    grad_y[i] = (u[idx(t,y+1,x)] - u[idx(t,y-1,x)]) / (2*dy)
+#                 # Y gradient
+#                 if y == 0:
+#                     grad_y[i] = (u[idx(t,y+1,x)] - u[i]) / dy
+#                 elif y == Ny-1:
+#                     grad_y[i] = (u[i] - u[idx(t,y-1,x)]) / dy
+#                 else:
+#                     grad_y[i] = (u[idx(t,y+1,x)] - u[idx(t,y-1,x)]) / (2*dy)
 
-    return np.array([grad_t, grad_x, grad_y])
+#     return np.array([grad_t, grad_x, grad_y])
 
 # def solve(rho0, rhoT, Nt, Nx, Ny, r=1, epsilon=0.3, max_it=100):    
 #     qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
@@ -864,37 +843,63 @@ def space_time_grad(u, Nt, Nx, Ny, dt, dx, dy):
 #         break
 #     return mu, phi, q
 
-def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, max_it=100):
-    dt = 1. / (Nt - 1)
-    dx = 1. / (Nx - 1)
-    dy = 1. / (Ny - 1)
+# def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, max_it=100):
+#     dt = 1. / (Nt - 1)
+#     dx = 1. / (Nx - 1)
+#     dy = 1. / (Ny - 1)
 
-    qPrev = np.zeros([3, Nt*Nx*Ny])
-    mu = np.zeros([3, Nt*Nx*Ny])
-    crit = -1
-    for i in range(max_it):
-        phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, reg_epsilon, Nt, Nx, Ny, dt, dx, dy)
+#     qPrev = np.zeros([3, Nt*Nx*Ny])
+#     mu = np.zeros([3, Nt*Nx*Ny])
+#     crit = -1
+#     for i in range(max_it):
+#         phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, reg_epsilon, Nt, Nx, Ny, dt, dx, dy)
 
-        gradPhi = space_time_grad(phi, Nt, Nx, Ny, dt, dx, dy)
-        z = gradPhi + (1.0 / r) * mu
-        q = stepB(z, Nt, Nx, Ny)
+#         gradPhi = space_time_grad(phi, Nt, Nx, Ny, dt, dx, dy)
+#         z = gradPhi + (1.0 / r) * mu
+#         q = stepB(z, Nt, Nx, Ny)
 
-        mu = mu + r * (gradPhi - q)
-        mu[0,:] = np.maximum(mu[0,:], 1e-10)  # Ensure positivity
+#         mu = mu + r * (gradPhi - q)
+#         mu[0,:] = np.maximum(mu[0,:], 1e-10)  # Ensure positivity
 
-        res = gradPhi[0,:] + 0.5 * (gradPhi[1,:]**2 + gradPhi[2,:]**2)
-        num = np.sum(mu[0,:] * np.abs(res))
-        denom = np.sum(mu[0,:] * (gradPhi[1,:]**2 + gradPhi[2,:]**2))
+#         res = gradPhi[0,:] + 0.5 * (gradPhi[1,:]**2 + gradPhi[2,:]**2)
+#         num = np.sum(mu[0,:] * np.abs(res))
+#         denom = np.sum(mu[0,:] * (gradPhi[1,:]**2 + gradPhi[2,:]**2))
 
-        prev_crit = crit
-        crit = np.sqrt(num / (denom + 1e-10))  # prevent zero division
-        print(f"{crit:.4e} ({i+1}/{max_it})")
+#         prev_crit = crit
+#         crit = np.sqrt(num / (denom + 1e-10))  # prevent zero division
+#         print(f"{crit:.4e} ({i+1}/{max_it})")
 
-        if crit <= convergence_tol:
-            break
+#         if crit <= convergence_tol:
+#             break
         
-        if prev_crit >= 0:
-          if np.abs(prev_crit - crit) < 1e-5:
-            break
+#         if prev_crit >= 0:
+#           if np.abs(prev_crit - crit) < 1e-5:
+#             break
 
+#     return mu, phi, q
+
+def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, max_it=100):
+    dt = 1. # / (Nt - 1)
+    dx = 1. # / (Nx - 1)
+    dy = 1. # / (Ny - 1)   
+    qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
+    mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] m\to \R^2
+    
+    for i in range(0,max_it):
+      phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, reg_epsilon, Nt, Nx, Ny, dt, dx, dy)
+    
+      spaceTimeGradPhi = spaceTimeGrad(phi, Nt, Nx, Ny, dt, dx, dy)
+      q = stepB(spaceTimeGradPhi + 1./r*mu, Nt, Nx, Ny)
+      # stepC
+      muNext = mu + r*( spaceTimeGradPhi - q )
+    
+      qPrev = q
+      mu = muNext
+    
+      res = spaceTimeGradPhi[0,:] + 0.5*(np.power(spaceTimeGradPhi[1,:], 2) + np.power(spaceTimeGradPhi[2,:], 2) )
+      crit = np.sqrt( np.sum( np.multiply(mu[0,:], np.abs(res))) / np.sum( np.multiply(mu[0,:], np.power(spaceTimeGradPhi[1,:], 2) + np.power(spaceTimeGradPhi[2,:], 2) )) )
+      print(str(crit)+" ("+str(i+1)+"/"+str(max_it)+")")
+    
+      if crit <= convergence_tol:
+        break
     return mu, phi, q

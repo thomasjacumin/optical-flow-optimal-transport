@@ -129,7 +129,7 @@ def reconstructTrajectory(xStart, yStart, u, v, Nx, Ny, Nt):
 
     xEnd = xStart
     yEnd = yStart
-    for n in range(Nt - 1):
+    for n in range(Nt-1):
         tXEnd = int(xEnd)
         tYEnd = int(yEnd)
 

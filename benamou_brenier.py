@@ -18,6 +18,9 @@ import numpy as np
 from scipy import sparse
 from scipy.sparse.linalg import spsolve, cg
 
+from PIL import Image
+import utils
+
 def spaceTimeDiv(u, Nt, Nx, Ny, dt, dx, dy):
   """
     Compute the space-time divergence of a vector field `u`.
@@ -252,11 +255,11 @@ def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy):
 
     # Add non-homogeneous Neumann BC correction in time at t=0 and t=Nt-1
     idx_t0 = np.arange(Nx*Ny)
-    g0 = -(rho0 - mu[0, 0:Nx*Ny] + r * q[0, 0:Nx*Ny])
-    F[idx_t0] += 1/dt * g0
+    g0 = rho0 - mu[0, 0:Nx*Ny] + r * q[0, 0:Nx*Ny]
+    F[idx_t0] -= 1/dt * g0
 
     idx_tN = np.arange(Nx*Ny) + (Nt-1)*Nx*Ny
-    gN = (rhoT - mu[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny] + r * q[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny])
+    gN = rhoT - mu[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny] + r * q[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny]
     F[idx_tN] += 1/dt * gN
 
     # u = spsolve(A, F)
@@ -265,7 +268,7 @@ def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy):
     return u
 
 def stepB(p, Nt, Nx, Ny):
-  """
+    """
     Nonlinear projection step applying cubic root computations.
 
     Parameters
@@ -283,44 +286,128 @@ def stepB(p, Nt, Nx, Ny):
     -------
     ndarray, shape (3, Nt*Nx*Ny)
         Projected variables after nonlinear transformation.
-  """
+    """
+
+    alpha = p[0]
+    beta1 = p[1]
+    beta2 = p[2]
+
+    rho = np.sqrt(beta1**2 + beta2**2)
+    theta = np.arctan2(beta2, beta1)
+
+    condition = 2 * alpha + beta1**2 + beta2**2 <= 0
+
+    a = np.empty_like(alpha)
+    b1 = np.empty_like(alpha)
+    b2 = np.empty_like(alpha)
+
+    # Case 1: condition is True – keep original
+    a[condition] = alpha[condition]
+    b1[condition] = beta1[condition]
+    b2[condition] = beta2[condition]
+
+    # Case 2: condition is False – nonlinear transformation
+    not_cond = ~condition
+    alpha_nc = alpha[not_cond]
+    rho_nc = rho[not_cond]
+    theta_nc = theta[not_cond]
+
+    # Expression inside condition for root logic
+    discriminant = -32 * (alpha_nc + 1) ** 3 - 108 * rho_nc ** 2
+
+    zh = np.empty_like(alpha_nc)
+    alphaH = np.empty_like(alpha_nc)
+    rhoH = np.empty_like(alpha_nc)
+
+    # Sub-case A: single real root
+    sub_A = discriminant < 0
+    if np.any(sub_A):
+        term = (1 / 4) * np.sqrt(2) * rho_nc[sub_A] + (1 / 6) * np.sqrt(
+            4 / 3 * alpha_nc[sub_A] ** 3 +
+            4 * alpha_nc[sub_A] ** 2 +
+            4 * alpha_nc[sub_A] +
+            4 / 3 +
+            4.5 * rho_nc[sub_A] ** 2
+        )
+        zh[sub_A] = -1 / 3 * (alpha_nc[sub_A] + 1) / np.cbrt(term) + np.cbrt(term)
+        alphaH[sub_A] = -zh[sub_A] ** 2
+        rhoH[sub_A] = np.sqrt(2) * zh[sub_A]
+
+    # Sub-case B: triple root
+    sub_B = ~sub_A
+    if np.any(sub_B):
+        sqrt_term = np.sqrt(-alpha_nc[sub_B] - 1)
+        acos_arg = (3 / 2) ** 1.5 * rho_nc[sub_B] / (-alpha_nc[sub_B] - 1) ** 1.5
+        zh[sub_B] = 2 * np.sqrt(2 / 3) * sqrt_term * np.cos(np.arccos(acos_arg) / 3)
+        alphaH[sub_B] = -0.5 * zh[sub_B] ** 2
+        rhoH[sub_B] = zh[sub_B]
+
+    beta1H = rhoH * np.cos(theta_nc)
+    beta2H = rhoH * np.sin(theta_nc)
+
+    a[not_cond] = alphaH
+    b1[not_cond] = beta1H
+    b2[not_cond] = beta2H
+
+    return np.array([a, b1, b2])
+
+# def stepB(p, Nt, Nx, Ny):
+#   """
+#     Nonlinear projection step applying cubic root computations.
+
+#     Parameters
+#     ----------
+#     p : ndarray, shape (3, Nt*Nx*Ny)
+#         Input variables consisting of alpha and beta components.
+#     Nt : int
+#         Number of time steps.
+#     Nx : int
+#         Number of spatial grid points in x-direction.
+#     Ny : int
+#         Number of spatial grid points in y-direction.
+
+#     Returns
+#     -------
+#     ndarray, shape (3, Nt*Nx*Ny)
+#         Projected variables after nonlinear transformation.
+#   """
   
-  a = np.zeros(Nt*Nx*Ny)
-  b1 = np.zeros(Nt*Nx*Ny)
-  b2 = np.zeros(Nt*Nx*Ny)
+#   a = np.zeros(Nt*Nx*Ny)
+#   b1 = np.zeros(Nt*Nx*Ny)
+#   b2 = np.zeros(Nt*Nx*Ny)
 
-  for i in range(Nt*Nx*Ny):
-    alpha = p[0,i]
-    beta1 = p[1,i]
-    beta2 = p[2,i] 
+#   for i in range(Nt*Nx*Ny):
+#     alpha = p[0,i]
+#     beta1 = p[1,i]
+#     beta2 = p[2,i] 
 
-    if 2*alpha + beta1**2 + beta2**2 <= 0:
-      a[i] = alpha
-      b1[i] = beta1
-      b2[i] = beta2
-    else:
-      # on passe (alpha, beta1, beta2) en coordonnées cylindriques (alpha, rho, theta)
-      rho = np.sqrt(beta1**2 + beta2**2)
-      theta = np.arctan2(beta2, beta1)
-      if -32*(alpha+1)**3-108*rho**2 < 0:
-        # print("racine unique")
-        zh = -1/3*(alpha + 1)/np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
-        zh = zh + np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
-        alphaH = -zh**2
-        rhoH = np.sqrt(2)*zh
-      else:
-        # print("racine triple")
-        zh = 2*np.sqrt(2/3)*np.sqrt(-alpha-1)*np.cos(1/3*np.arccos(np.power(3/2, 3/2)*rho/np.power(-alpha-1, 3/2)))
-        alphaH = -0.5*zh**2
-        rhoH = zh
-      # on passe (alphaH, rhoH, theta) en coordonnées carthésiennes (alphaH, beta1H, beta2H)
-      beta1H = rhoH*np.cos(theta)
-      beta2H = rhoH*np.sin(theta)
+#     if 2*alpha + beta1**2 + beta2**2 <= 0:
+#       a[i] = alpha
+#       b1[i] = beta1
+#       b2[i] = beta2
+#     else:
+#       # on passe (alpha, beta1, beta2) en coordonnées cylindriques (alpha, rho, theta)
+#       rho = np.sqrt(beta1**2 + beta2**2)
+#       theta = np.arctan2(beta2, beta1)
+#       if -32*(alpha+1)**3-108*rho**2 < 0:
+#         # print("racine unique")
+#         zh = -1/3*(alpha + 1)/np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
+#         zh = zh + np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
+#         alphaH = -zh**2
+#         rhoH = np.sqrt(2)*zh
+#       else:
+#         # print("racine triple")
+#         zh = 2*np.sqrt(2/3)*np.sqrt(-alpha-1)*np.cos(1/3*np.arccos(np.power(3/2, 3/2)*rho/np.power(-alpha-1, 3/2)))
+#         alphaH = -0.5*zh**2
+#         rhoH = zh
+#       # on passe (alphaH, rhoH, theta) en coordonnées carthésiennes (alphaH, beta1H, beta2H)
+#       beta1H = rhoH*np.cos(theta)
+#       beta2H = rhoH*np.sin(theta)
 
-      a[i] = alphaH
-      b1[i] = beta1H
-      b2[i] = beta2H
-  return np.array([a, b1, b2])
+#       a[i] = alphaH
+#       b1[i] = beta1H
+#       b2[i] = beta2H
+#   return np.array([a, b1, b2])
 
 def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, max_it=100):
     """
@@ -361,12 +448,12 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
     dy = 1
 
     qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
-    mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] m\to \R^2
+    mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] \to \R^2
     crit = -1
     # Assemble operator
     L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
     I = sparse.eye(Nt*Nx*Ny)
-    A = -r*L_st + reg_epsilon*I
+    A = -r*L_st + r*reg_epsilon*I
     for i in range(0,max_it):
       # stepA
       phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy)
@@ -391,5 +478,31 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
       if prev_crit >= 0:
         if np.abs(prev_crit - crit) < 1e-5:
           break
+
+
+    # DEBUG
+        
+    Image.fromarray(np.uint8(255*np.clip(rho0, 0, 1).reshape([Ny,Nx])), 'L').save("results/rho0.png")
+    Image.fromarray(np.uint8(255*np.clip(rhoT, 0, 1).reshape([Ny,Nx])), 'L').save("results/rhoT.png")
+    rhon = np.zeros([Nt, Nx*Ny])
+    for n in range(0, Nt):
+      rhon[n,:] = mu[0,n*Nx*Ny:(n+1)*Nx*Ny]
+      IE = utils.IE(Nx, Ny, rhoT, rhon[n,:])
+      print(f"{n}: {IE}")
+      Image.fromarray(np.uint8(255*np.clip(rhon[n,:], 0, 1).reshape([Ny,Nx])), 'L').save(f"results/{n}.png")
+    
+    un = np.zeros([Nt, Nx*Ny])
+    vn = np.zeros([Nt, Nx*Ny])
+    mn = np.zeros([Nt, Nx*Ny])
+    for n in range(0, Nt):
+      [dun, dvn] = utils.spaceGrad(phi, n, Nx, Ny)
+      un[n,:] = dun
+      vn[n,:] = dvn
+      mn[n,:] = -utils.spaceDiv(np.array([un[n,:],vn[n,:]]), Nx, Ny)
+      rec = utils.apply_opticalflow(rhon[n,:], un[n,:], vn[n,:], Nx, Ny, mn[n,:])
+      Image.fromarray(np.uint8(255*np.clip(rec, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/rec-{n+1}.png")
+      utils.saveFlo(Nx, Ny, un[n,:], vn[n,:], f"results/flo-{n}.flo")
+
+    ##############
 
     return mu, phi, q

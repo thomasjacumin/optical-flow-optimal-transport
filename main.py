@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image
 import argparse
 import time
+import cv2
 
 import utils
 import benamou_brenier
@@ -51,23 +52,23 @@ np.random.seed(0)
 f1, w, h = utils.openGrayscaleImage(args.f0)
 f2, w, h = utils.openGrayscaleImage(args.f1)
 
-#######################
-r_x = int(w/4)
-r_y = int(h/4)
-L = 40
-for i in range(int(r_y-L/2), int(r_y+L/2)):
-    for j in range(int(r_x-L/2), int(r_x+L/2)):
-        f2[i+j*w] = f2[i+j*w]-0.2
-c_x = int(w/2)
-c_y = int(h/2)
-R = 30
-for i in range(0, h):
-    for j in range(0, w):
-        if (i-c_x)**2 + (j-c_y)**2 < R**2:
-            f2[i+j*w] = f2[i+j*w]+0.2
-f2 = np.clip(f2, 0, 1)
-Image.fromarray(np.uint8(255*f2.reshape([h,w])), 'L').save("results/f2.png")
-##############################################
+# #######################
+# r_x = int(w/4)
+# r_y = int(h/4)
+# L = 40
+# for i in range(int(r_y-L/2), int(r_y+L/2)):
+#     for j in range(int(r_x-L/2), int(r_x+L/2)):
+#         f2[i+j*w] = f2[i+j*w]-0.2
+# c_x = int(w/2)
+# c_y = int(h/2)
+# R = 30
+# for i in range(0, h):
+#     for j in range(0, w):
+#         if (i-c_x)**2 + (j-c_y)**2 < R**2:
+#             f2[i+j*w] = f2[i+j*w]+0.2
+# f2 = np.clip(f2, 0, 1)
+# Image.fromarray(np.uint8(255*f2.reshape([h,w])), 'L').save("results/f2.png")
+# ##############################################
 
 print("***********************************")
 print("Input images: ")
@@ -78,8 +79,10 @@ if args.normalize == True:
     rho1 = f1/(np.sum(f1)/(w*h))
     rho2 = f2/(np.sum(f2)/(w*h))
 else:
-    rho1 = f1
+    rho1 = f1 
     rho2 = f2
+# rho1 = cv2.GaussianBlur(rho1, (9, 9), 0).flatten()
+# rho2 = cv2.GaussianBlur(rho2, (9, 9), 0).flatten()
 
 # Start timer
 start_time = time.time()

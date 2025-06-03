@@ -1,9 +1,5 @@
 #!/bin/bash
 
-run__help() {
-  echo "help"
-}
-
 run__download() {
     mkdir data
     # Middlebury-1
@@ -48,7 +44,7 @@ run() {
                     --out=results/middlebury-1/$input/gn.flo --save-benchmark=results/middlebury-1/$input/gn.benchmark.txt \
                     --save-reconstruction=results/middlebury-1/$input/gn.rec.png \
                     --save-lum=results/middlebury-1/$input/gn.lum.png \
-                    --algo=GN --alpha=0.1 --lambda=0.2 --normalize
+                    --algo=GN --alpha=0.1 --lambda=0.2
                 ./bin/color_flow results/middlebury-1/$input/gn.flo results/middlebury-1/$input/gn.png
                 touch results/middlebury-1/$input/.out.gn.sucess
             fi
@@ -59,7 +55,7 @@ run() {
                     --out=results/middlebury-1/$input/foto.flo --save-benchmark=results/middlebury-1/$input/foto.benchmark.txt \
                     --save-reconstruction=results/middlebury-1/$input/foto.rec.png \
                     --save-lum=results/middlebury-1/$input/foto.lum.png \
-                    --algo=foto --epsilon=0.01 --Nt=16 --max-it=400 --normalize
+                    --algo=foto --r=1 --convergence-tol=0.01 --reg-epsilon=1e-3 --Nt=16 --max-it=200 --normalize
                 ./bin/color_flow results/middlebury-1/$input/foto.flo results/middlebury-1/$input/foto.png
                 touch results/middlebury-1/$input/.out.foto.sucess
             fi
@@ -100,7 +96,7 @@ run() {
                         --out=results/middlebury-2/$input/foto.flo --save-benchmark=results/middlebury-2/$input/foto.benchmark.txt \
                         --save-reconstruction=results/middlebury-2/$input/foto.rec.png \
                         --save-lum=results/middlebury-2/$input/foto.lum.png \
-                        --algo=foto --epsilon=0.1 --Nt=4
+                        --algo=foto --convergence-tol=0.1 --Nt=4
                     ./bin/color_flow results/middlebury-2/$input/foto.flo results/middlebury-2/$input/foto.png # $normalizing
                     touch results/middlebury-2/$input/.out.foto.sucess
                 fi
@@ -110,9 +106,7 @@ run() {
     done
 }
 
-if [ "$1" = "help" ]; then
-    run__help
-elif [ "$1" = "download" ]; then
+if [ "$1" = "download" ]; then
     run__download
 elif [ "$1" = "install" ]; then
     run__installpipdependencies
@@ -121,5 +115,3 @@ elif [ "$1" = "restart" ]; then
 else
     run
 fi
-
-

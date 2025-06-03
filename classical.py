@@ -1,3 +1,19 @@
+# -----------------------------------------------------------------------------
+# Copyright (c) 2025, Thomas Jacumin
+#
+# This file is part of a program licensed under the GNU General Public License
+# as published by the Free Software Foundation, either version 3 of the License,
+# or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+# -----------------------------------------------------------------------------
+
 import numpy as np
 import scipy
 import scipy.sparse.linalg
@@ -7,20 +23,64 @@ from scipy import sparse
 import utils
 
 class GLLOpticalFlow(object):
+  """
+    Gennert and Negahdaripour Optical Flow Estimator.
+  """
   NAME = "GLL"
   LUMINOSITY = True
   def __init__(self, w=0, h=0):
+    """
+        Initialize the GLLOpticalFlow object.
+
+        Parameters:
+        -----------
+        w : int
+            Width of the image.
+        h : int
+            Height of the image.
+    """
     self.w = w
     self.h = h
     self.alpha = 0.1
 
   def setAlpha(self, alpha):
+    """
+        Set the spatial smoothness parameter.
+
+        Parameters:
+        -----------
+        alpha : float
+            Regularization parameter for smoothness term.
+    """
     self.alpha = alpha
 
   def setLambda(self, lambdap):
+    """
+        Set the luminosity regularization parameter.
+
+        Parameters:
+        -----------
+        lambdap : float
+            Regularization parameter for luminosity.
+    """
     self.lambdap = lambdap
   
   def assemble(self, f1, f2):
+    """
+        Assemble the sparse linear system Ax = b for optical flow estimation.
+
+        Parameters:
+        -----------
+        f1 : np.ndarray
+            First image frame (grayscale, flattened).
+        f2 : np.ndarray
+            Second image frame (grayscale, flattened).
+
+        Returns:
+        --------
+        self : GLLOpticalFlow
+            Returns self with system matrix `A` and vector `b` populated.
+    """
     w = self.w
     h = self.h
 
@@ -51,6 +111,16 @@ class GLLOpticalFlow(object):
     return self
 
   def process(self):
+    """
+        Solve the assembled system and return optical flow and motion components.
+
+        Returns:
+        --------
+        [u, v, m] : list of np.ndarray
+            u : horizontal component of flow
+            v : vertical component of flow
+            m : luminosity
+    """
     w = self.w
     h = self.h
     x = scipy.sparse.linalg.spsolve(self.A, self.b)

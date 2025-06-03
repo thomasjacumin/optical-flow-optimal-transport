@@ -26,7 +26,7 @@ The pipeline downloads the datasets, runs evaluations, and visualizes the result
 
 ---
 
-### 📂 Directory Structure
+## 📂 Directory Structure
 
 After running the pipeline, the following structure will be created:
 
@@ -120,12 +120,6 @@ To delete previous results and rerun everything:
 ./run.sh restart
 ```
 
-### Display Help
-
-```bash
-./run.sh help
-```
-
 ---
 
 ## 🧪 Dependencies
@@ -142,7 +136,7 @@ Other tools:
 * `wget`, `unzip` (for dataset handling)
 * `bash`, `python3`
 
-Ensure `./bin/color_flow` is present and executable.
+Ensure `./bin/color_flow` from Middlebury is present and executable.
 
 ---
 

@@ -1,9 +1,49 @@
+# -----------------------------------------------------------------------------
+# Copyright (c) 2025, Thomas Jacumin
+#
+# This file is part of a program licensed under the GNU General Public License
+# as published by the Free Software Foundation, either version 3 of the License,
+# or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+# -----------------------------------------------------------------------------
+
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy import sparse
 from scipy.sparse.linalg import spsolve, cg
 
 def spaceTimeDiv(u, Nt, Nx, Ny, dt, dx, dy):
+  """
+    Compute the space-time divergence of a vector field `u`.
+
+    Parameters
+    ----------
+    u : ndarray, shape (3, Nt*Nx*Ny)
+        Input vector field components: time, x, and y components flattened over space-time.
+    Nt : int
+        Number of time steps.
+    Nx : int
+        Number of spatial grid points in x-direction.
+    Ny : int
+        Number of spatial grid points in y-direction.
+    dt : float
+        Time step size.
+    dx : float
+        Spatial grid spacing in x-direction.
+    dy : float
+        Spatial grid spacing in y-direction.
+
+    Returns
+    -------
+    ndarray, shape (Nt*Nx*Ny,)
+        The divergence of `u` at each space-time point.
+  """
   gradTU = np.zeros(Nt*Nx*Ny)
   for n in range(Nt):
     for y in range(Ny):
@@ -40,6 +80,31 @@ def spaceTimeDiv(u, Nt, Nx, Ny, dt, dx, dy):
   return 1./dt*gradTU + 1./dx*gradXU + 1./dy*gradYU
 
 def spaceTimeGrad(u, Nt, Nx, Ny, dt, dx, dy):
+  """
+    Compute the space-time gradient of a scalar field `u`.
+
+    Parameters
+    ----------
+    u : ndarray, shape (Nt*Nx*Ny,)
+        Input scalar field flattened over space-time.
+    Nt : int
+        Number of time steps.
+    Nx : int
+        Number of spatial grid points in x-direction.
+    Ny : int
+        Number of spatial grid points in y-direction.
+    dt : float
+        Time step size.
+    dx : float
+        Spatial grid spacing in x-direction.
+    dy : float
+        Spatial grid spacing in y-direction.
+
+    Returns
+    -------
+    ndarray, shape (3, Nt*Nx*Ny)
+        The gradient components [time, x, y] at each space-time point.
+  """
   gradTU = np.zeros(Nt*Nx*Ny)
   for n in range(Nt):
     for y in range(Ny):
@@ -76,6 +141,21 @@ def spaceTimeGrad(u, Nt, Nx, Ny, dt, dx, dy):
   return np.array([1./dt*gradTU, 1./dx*gradXU, 1./dy*gradYU])
 
 def lap1d_neumann(N, dx):
+    """
+    Construct a 1D Laplacian matrix with Neumann (zero-flux) boundary conditions.
+
+    Parameters
+    ----------
+    N : int
+        Number of grid points.
+    dx : float
+        Grid spacing.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Sparse Laplacian operator matrix of size N x N.
+    """
     diagonals = [
         np.ones(N-1),
         -2 * np.ones(N),
@@ -94,6 +174,29 @@ def lap1d_neumann(N, dx):
     return L.tocsr()
 
 def assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy):
+    """
+    Assemble the full space-time Laplacian operator combining time and 2D space.
+
+    Parameters
+    ----------
+    Nt : int
+        Number of time steps.
+    dt : float
+        Time step size.
+    Nx : int
+        Number of spatial grid points in x-direction.
+    dx : float
+        Spatial grid spacing in x-direction.
+    Ny : int
+        Number of spatial grid points in y-direction.
+    dy : float
+        Spatial grid spacing in y-direction.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Sparse matrix representing the combined space-time Laplacian.
+    """
     Lx = lap1d_neumann(Nx, dx)
     Ly = lap1d_neumann(Ny, dy)
     Lt = lap1d_neumann(Nt, dt)
@@ -108,6 +211,42 @@ def assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy):
     return L_st
 
 def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy):
+    """
+    Perform one linear system solve step of the Benamou-Brenier formulation.
+
+    Parameters
+    ----------
+    mu : ndarray, shape (3, Nt*Nx*Ny)
+        Current iterate of density and momenta.
+    q : ndarray, shape (3, Nt*Nx*Ny)
+        Auxiliary momentum variables.
+    rho0 : ndarray, shape (Nx*Ny,)
+        Initial density distribution.
+    rhoT : ndarray, shape (Nx*Ny,)
+        Target density distribution.
+    r : float
+        Regularization parameter.
+    A : scipy.sparse.csr_matrix
+        Sparse system matrix.
+    Nt : int
+        Number of time steps.
+    Nx : int
+        Number of spatial grid points in x-direction.
+    Ny : int
+        Number of spatial grid points in y-direction.
+    dt : float
+        Time step size.
+    dx : float
+        Spatial grid spacing in x-direction.
+    dy : float
+        Spatial grid spacing in y-direction.
+
+    Returns
+    -------
+    ndarray, shape (Nt*Nx*Ny,)
+        Solution vector for the step.
+    """
+
     # Compute RHS: divergence term
     F = spaceTimeDiv(mu-r*q, Nt, Nx, Ny, dt, dx, dy)
 
@@ -126,6 +265,26 @@ def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy):
     return u
 
 def stepB(p, Nt, Nx, Ny):
+  """
+    Nonlinear projection step applying cubic root computations.
+
+    Parameters
+    ----------
+    p : ndarray, shape (3, Nt*Nx*Ny)
+        Input variables consisting of alpha and beta components.
+    Nt : int
+        Number of time steps.
+    Nx : int
+        Number of spatial grid points in x-direction.
+    Ny : int
+        Number of spatial grid points in y-direction.
+
+    Returns
+    -------
+    ndarray, shape (3, Nt*Nx*Ny)
+        Projected variables after nonlinear transformation.
+  """
+  
   a = np.zeros(Nt*Nx*Ny)
   b1 = np.zeros(Nt*Nx*Ny)
   b2 = np.zeros(Nt*Nx*Ny)
@@ -164,6 +323,39 @@ def stepB(p, Nt, Nx, Ny):
   return np.array([a, b1, b2])
 
 def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, max_it=100):
+    """
+    Solve the optimal transport problem using the Benamou-Brenier formulation
+    with iterative updates.
+
+    Parameters
+    ----------
+    rho0 : ndarray, shape (Nx*Ny,)
+        Initial density distribution.
+    rhoT : ndarray, shape (Nx*Ny,)
+        Final density distribution.
+    Nt : int
+        Number of time steps.
+    Nx : int
+        Number of spatial grid points in x-direction.
+    Ny : int
+        Number of spatial grid points in y-direction.
+    r : float, optional
+        Regularization parameter (default is 1).
+    convergence_tol : float, optional
+        Convergence tolerance for iterative solver (default is 0.3).
+    reg_epsilon : float, optional
+        Regularization epsilon added to system matrix diagonal (default is 1e-3).
+    max_it : int, optional
+        Maximum number of iterations (default is 100).
+
+    Returns
+    -------
+    tuple of ndarray
+        - mu: ndarray, shape (3, Nt*Nx*Ny), final density and momenta.
+        - phi: ndarray, shape (Nt*Nx*Ny,), potential field.
+        - q: ndarray, shape (3, Nt*Nx*Ny), auxiliary momentum variables.
+    """
+
     dt = 1
     dx = 1
     dy = 1
@@ -174,19 +366,18 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
     # Assemble operator
     L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
     I = sparse.eye(Nt*Nx*Ny)
-    A = -r * L_st + reg_epsilon * I
+    A = -r*L_st + reg_epsilon*I
     for i in range(0,max_it):
+      # stepA
       phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy)
-    
+      # stepB
       gradPhi = spaceTimeGrad(phi, Nt, Nx, Ny, dt, dx, dy)
       q = stepB(gradPhi + (1./r)*mu, Nt, Nx, Ny)
       # stepC
-      muNext = mu + r*( gradPhi - q )
+      mu = mu + r*( gradPhi - q )
       mu[0,:] = np.maximum(mu[0,:], 1e-10)  # Ensure positivity
-    
       qPrev = q
-      mu = muNext
-
+      
       res = gradPhi[0,:] + 0.5 * (gradPhi[1,:]**2 + gradPhi[2,:]**2)
       num = np.sum(mu[0,:] * np.abs(res))
       denom = np.sum(mu[0,:] * (gradPhi[1,:]**2 + gradPhi[2,:]**2))

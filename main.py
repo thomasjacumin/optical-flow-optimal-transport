@@ -1,6 +1,21 @@
+# -----------------------------------------------------------------------------
+# Copyright (c) 2025, Thomas Jacumin
+#
+# This file is part of a program licensed under the GNU General Public License
+# as published by the Free Software Foundation, either version 3 of the License,
+# or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+# -----------------------------------------------------------------------------
+
 import numpy as np
 from PIL import Image
-import matplotlib.pyplot as plt
 import argparse
 import time
 
@@ -20,7 +35,9 @@ parser.add_argument("--save-lum", nargs='?', help="file output of luminosity")
 # Model parameters
 parser.add_argument("--algo", nargs='?', help="Algorithm")
 parser.add_argument("--Nt", nargs='?', type=int, default=4, help="Discretization in time")
-parser.add_argument("--epsilon", nargs='?', type=float, default=0.1, help="Stopping threshold")
+parser.add_argument("--r", nargs='?', type=float, default=1., help="augmented langrangian parameter")
+parser.add_argument("--convergence-tol", nargs='?', type=float, default=0.1, help="Stopping threshold")
+parser.add_argument("--reg-epsilon", nargs='?', type=float, default=1e-3, help="Regularization for the step 1 of Benamou-Brenier")
 parser.add_argument("--max-it", nargs='?', type=int, default=100, help="Maximal number of iteration")
 parser.add_argument("--normalize", action=argparse.BooleanOptionalAction, help="normalize the input images if enabled")
 parser.add_argument("--alpha", nargs='?', type=float, default=0.1, help="Horn-Schunck alpha")
@@ -34,23 +51,23 @@ np.random.seed(0)
 f1, w, h = utils.openGrayscaleImage(args.f0)
 f2, w, h = utils.openGrayscaleImage(args.f1)
 
-# #######################
-# r_x = int(w/4)
-# r_y = int(h/4)
-# L = 40
-# for i in range(int(r_y-L/2), int(r_y+L/2)):
-#     for j in range(int(r_x-L/2), int(r_x+L/2)):
-#         f2[i+j*w] = f2[i+j*w]-0.2
-# c_x = int(w/2)
-# c_y = int(h/2)
-# R = 30
-# for i in range(0, h):
-#     for j in range(0, w):
-#         if (i-c_x)**2 + (j-c_y)**2 < R**2:
-#             f2[i+j*w] = f2[i+j*w]+0.2
-# f2 = np.clip(f2, 0, 1)
-# Image.fromarray(np.uint8(255*f2.reshape([h,w])), 'L').save("results/f2.png")
-# ##############################################
+#######################
+r_x = int(w/4)
+r_y = int(h/4)
+L = 40
+for i in range(int(r_y-L/2), int(r_y+L/2)):
+    for j in range(int(r_x-L/2), int(r_x+L/2)):
+        f2[i+j*w] = f2[i+j*w]-0.2
+c_x = int(w/2)
+c_y = int(h/2)
+R = 30
+for i in range(0, h):
+    for j in range(0, w):
+        if (i-c_x)**2 + (j-c_y)**2 < R**2:
+            f2[i+j*w] = f2[i+j*w]+0.2
+f2 = np.clip(f2, 0, 1)
+Image.fromarray(np.uint8(255*f2.reshape([h,w])), 'L').save("results/f2.png")
+##############################################
 
 print("***********************************")
 print("Input images: ")
@@ -68,9 +85,18 @@ else:
 start_time = time.time()
 # Solve
 if args.algo == 'foto':
-    mu, phi, q = benamou_brenier.solve(rho1, rho2, args.Nt, w, h, r=1, convergence_tol=args.epsilon, reg_epsilon=1e-5, max_it=args.max_it)
+    print(" - algorithm: FOTO")
+    print(f"\t - Nt={args.Nt}")
+    print(f"\t - r={args.r}")
+    print(f"\t - convergence_tol={args.convergence_tol}")
+    print(f"\t - reg_epsilon={args.reg_epsilon}")
+    print(f"\t - max_it={args.max_it}")
+    mu, phi, q = benamou_brenier.solve(rho1, rho2, args.Nt, w, h, r=args.r, convergence_tol=args.convergence_tol, reg_epsilon=args.reg_epsilon, max_it=args.max_it)
     u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
 elif args.algo == 'GN':
+    print(" - algorithm: GN")
+    print(f"\t - alpha={args.alpha}")
+    print(f"\t - lambda={args.lambdaa}")
     classical = classical.GLLOpticalFlow(w,h)
     classical.setAlpha(args.alpha)
     classical.setLambda(args.lambdaa)

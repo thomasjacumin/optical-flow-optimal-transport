@@ -20,7 +20,7 @@ import scipy.sparse.linalg
 from scipy.sparse import bmat
 from scipy import sparse
 
-import utils
+import operators
 
 class GLLOpticalFlow(object):
   """
@@ -99,7 +99,7 @@ class GLLOpticalFlow(object):
 
     ft = f2 - f1
 
-    grad = utils.grad(w,h)
+    grad = operators.grad(w, h, 1, 1)
     div = -grad.transpose()
     lap = div@grad
 

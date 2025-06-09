@@ -20,6 +20,8 @@ import math
 from scipy import sparse
 from scipy.sparse import bmat
 
+import operators
+
 def openGrayscaleImage(inputPathname):
   """
     Opens an image file and converts it to a normalized grayscale flattened array.
@@ -38,77 +40,6 @@ def openGrayscaleImage(inputPathname):
   w = np.size(f,1)
   h = np.size(f,0)
   return f.flatten() / 255, w, h
-
-def spaceDiv(u, Nx, Ny):
-  """
-    Computes the spatial divergence of a 2D vector field.
-
-    Args:
-        u (np.ndarray): A 2x(Nx*Ny) vector field.
-        Nx (int): Width of the image/grid.
-        Ny (int): Height of the image/grid.
-
-    Returns:
-        np.ndarray: The divergence of the vector field as a 1D array.
-  """
-
-  dx = 1
-  dy = 1
-  gradXU = np.zeros(Nx*Ny)
-  for y in range(Ny):
-    for x in range(Nx):
-      if x > 0 and x < Nx-1:
-        gradXU[y*Nx+x] = 0.5*(u[0, y*Nx+x+1] - u[0, y*Nx+x-1])
-      elif x == 0:
-        gradXU[y*Nx+x] = u[0, y*Nx+x+1] - u[0, y*Nx+x]
-      elif x == Nx-1:
-        gradXU[y*Nx+x] = u[0, y*Nx+x] - u[0, y*Nx+x-1]
-  gradYU = np.zeros(Nx*Ny)
-  for y in range(Ny):
-    for x in range(Nx):
-      if y > 0 and y < Ny-1:
-        gradYU[y*Nx+x] = 0.5*(u[1, (y+1)*Nx+x] - u[1, (y-1)*Nx+x])
-      elif y == 0:
-        gradYU[y*Nx+x] = u[1, (y+1)*Nx+x] - u[1, y*Nx+x]
-      elif y == Ny-1:
-        gradYU[y*Nx+x] = u[1, y*Nx+x] - u[1, (y-1)*Nx+x]
-  return 1./dx*gradXU + 1./dy*gradYU
-
-def spaceGrad(u, n, Nx, Ny):
-  """
-    Computes the spatial gradient of the n-th time slice of a scalar field.
-
-    Args:
-        u (np.ndarray): Time-dependent scalar field of shape (Nt * Nx * Ny,).
-        n (int): Time index.
-        Nx (int): Width of the image/grid.
-        Ny (int): Height of the image/grid.
-
-    Returns:
-        np.ndarray: A 2x(Nx*Ny) array representing the gradient in x and y directions.
-  """
-
-  dx = 1
-  dy = 1
-  gradXU = np.zeros(Nx*Ny)
-  for y in range(Ny):
-    for x in range(Nx):
-      if x > 0 and x < Nx-1:
-        gradXU[y*Nx+x] = 0.5*(u[n*Nx*Ny+y*Nx+x+1] - u[n*Nx*Ny+y*Nx+x-1])
-      elif x == 0:
-        gradXU[y*Nx+x] = u[n*Nx*Ny+y*Nx+x+1] - u[n*Nx*Ny+y*Nx+x]
-      elif x == Nx-1:
-        gradXU[y*Nx+x] = u[n*Nx*Ny+y*Nx+x] - u[n*Nx*Ny+y*Nx+x-1]
-  gradYU = np.zeros(Nx*Ny)
-  for y in range(Ny):
-    for x in range(Nx):
-      if y > 0 and y < Ny-1:
-        gradYU[y*Nx+x] = 0.5*(u[n*Nx*Ny+(y+1)*Nx+x] - u[n*Nx*Ny+(y-1)*Nx+x])
-      elif y == 0:
-        gradYU[y*Nx+x] = u[n*Nx*Ny+(y+1)*Nx+x] - u[n*Nx*Ny+y*Nx+x]
-      elif y == Ny-1:
-        gradYU[y*Nx+x] = u[n*Nx*Ny+y*Nx+x] - u[n*Nx*Ny+(y-1)*Nx+x]
-  return np.array([1./dx*gradXU, 1./dy*gradYU])
 
 def reconstructTrajectory(xStart, yStart, u, v, Nx, Ny, Nt):
     """
@@ -214,7 +145,7 @@ def reconstructTrajectory(xStart, yStart, u, v, Nx, Ny, Nt):
     #     yEnd = yEndN
     # return [xEnd-xStart, yEnd-yStart]
 
-def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny):
+def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny, grad, div):
     """
     Computes the optical flow field from the Benamou-Brenier formulation.
 
@@ -231,9 +162,10 @@ def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny):
     un = np.zeros([Nt, Nx*Ny])
     vn = np.zeros([Nt, Nx*Ny])
     for n in range(0, Nt-1):
-        [dun, dvn] = spaceGrad(phi, n, Nx, Ny)
-        un[n,:] = dun
-        vn[n,:] = dvn
+        dU = (grad@phi[n*Nx*Ny:(n+1)*Nx*Ny])
+        # [dun, dvn] = spaceGrad(phi, n, Nx, Ny)
+        un[n,:] = dU[0:Nx*Ny] # dun
+        vn[n,:] = dU[Nx*Ny:2*Nx*Ny] # dvn
     
     u = np.zeros(Nx*Ny)
     v = np.zeros(Nx*Ny)
@@ -242,7 +174,11 @@ def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny):
             [up, vp] = reconstructTrajectory(xStart, yStart, un, vn, Nx, Ny, Nt)
             u[yStart*Nx + xStart] = up
             v[yStart*Nx + xStart] = vp
-    m = -spaceDiv(np.array([u,v]), Nx, Ny)
+
+    print(u.shape)
+    print(v.shape)
+    print(div.shape)
+    m = - div@np.concatenate((u,v)) # spaceDiv(np.array([u,v]), Nx, Ny)
     
     return u, v, m
 
@@ -416,77 +352,3 @@ def IE(w, h, I, IGT):
     """
 
     return np.sqrt ( np.sum( (255*I-255*IGT)**2 ) / (w*h) )
-
-def grad_x(w,h):
-  """
-    Creates a sparse matrix for computing horizontal gradient.
-
-    Args:
-        w (int): Width.
-        h (int): Height.
-
-    Returns:
-        scipy.sparse.csr_matrix: Horizontal gradient operator.
-  """
-  
-  Av = []
-  Ax = []
-  Ay = []
-  for i in range(0,h):
-    for j in range(0,w):
-      n = i*w+j
-      if j <= w-2:
-        Ax.append(n)
-        Ay.append(n)
-        Av.append(-1)
-        #
-        Ax.append(n)
-        Ay.append(n+1)
-        Av.append(1)
-
-  return sparse.csr_matrix((Av, (Ax, Ay)), shape=[w*h, w*h])
-
-def grad_y(w,h):
-  """
-    Creates a sparse matrix for computing vertical gradient.
-
-    Args:
-        w (int): Width.
-        h (int): Height.
-
-    Returns:
-        scipy.sparse.csr_matrix: Vertical gradient operator.
-  """
-  
-  Av = []
-  Ax = []
-  Ay = []
-  for i in range(0,h):
-    for j in range(0,w):
-      n = i*w+j
-      if i <= h-2:
-        Ax.append(n)
-        Ay.append(n)
-        Av.append(-1)
-        #
-        Ax.append(n)
-        Ay.append(n+w)
-        Av.append(1)
-
-  return sparse.csr_matrix((Av, (Ax, Ay)), shape=[w*h, w*h])
-
-def grad(w,h):
-  """
-    Creates a combined gradient operator matrix for both x and y directions.
-
-    Args:
-        w (int): Width.
-        h (int): Height.
-
-    Returns:
-        scipy.sparse.bmat: Combined gradient operator.
-  """
-
-  x = grad_x(w,h)
-  y = grad_y(w,h)
-  return  bmat([ [x], [y] ])

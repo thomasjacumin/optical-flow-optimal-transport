@@ -18,202 +18,12 @@ import numpy as np
 from scipy import sparse
 from scipy.sparse.linalg import spsolve, cg
 
+import operators
+
 from PIL import Image
 import utils
 
-def spaceTimeDiv(u, Nt, Nx, Ny, dt, dx, dy):
-  """
-    Compute the space-time divergence of a vector field `u`.
-
-    Parameters
-    ----------
-    u : ndarray, shape (3, Nt*Nx*Ny)
-        Input vector field components: time, x, and y components flattened over space-time.
-    Nt : int
-        Number of time steps.
-    Nx : int
-        Number of spatial grid points in x-direction.
-    Ny : int
-        Number of spatial grid points in y-direction.
-    dt : float
-        Time step size.
-    dx : float
-        Spatial grid spacing in x-direction.
-    dy : float
-        Spatial grid spacing in y-direction.
-
-    Returns
-    -------
-    ndarray, shape (Nt*Nx*Ny,)
-        The divergence of `u` at each space-time point.
-  """
-  gradTU = np.zeros(Nt*Nx*Ny)
-  for n in range(Nt):
-    for y in range(Ny):
-      for x in range(Nx):
-        if n > 0 and n < Nt-1:
-          gradTU[n*Nx*Ny+y*Nx+x] = 0.5*(u[0, (n+1)*Nx*Ny+y*Nx+x] - u[0, (n-1)*Nx*Ny+y*Nx+x])
-        elif n == 0:
-          gradTU[n*Nx*Ny+y*Nx+x] = u[0, (n+1)*Nx*Ny+y*Nx+x] - u[0, (n)*Nx*Ny+y*Nx+x]
-        elif n == Nt-1:
-          gradTU[n*Nx*Ny+y*Nx+x] = u[0, (n)*Nx*Ny+y*Nx+x] - u[0, (n-1)*Nx*Ny+y*Nx+x]
-
-  gradXU = np.zeros(Nt*Nx*Ny)
-  for n in range(Nt):
-    for y in range(Ny):
-      for x in range(Nx):
-        if x > 0 and x < Nx-1:
-          gradXU[n*Nx*Ny+y*Nx+x] = 0.5*(u[1, n*Nx*Ny+y*Nx+x+1] - u[1, n*Nx*Ny+y*Nx+x-1])
-        elif x == 0:
-          gradXU[n*Nx*Ny+y*Nx+x] = u[1, n*Nx*Ny+y*Nx+x+1] - u[1, n*Nx*Ny+y*Nx+x]
-        elif x == Nx-1:
-          gradXU[n*Nx*Ny+y*Nx+x] = u[1, n*Nx*Ny+y*Nx+x] - u[1, n*Nx*Ny+y*Nx+x-1]
-
-  gradYU = np.zeros(Nt*Nx*Ny)
-  for n in range(Nt):
-    for y in range(Ny):
-      for x in range(Nx):
-        if y > 0 and y < Ny-1:
-          gradYU[n*Nx*Ny+y*Nx+x] = 0.5*(u[2, n*Nx*Ny+(y+1)*Nx+x] - u[2, n*Nx*Ny+(y-1)*Nx+x])
-        elif y == 0:
-          gradYU[n*Nx*Ny+y*Nx+x] = u[2, n*Nx*Ny+(y+1)*Nx+x] - u[2, n*Nx*Ny+y*Nx+x]
-        elif y == Ny-1:
-          gradYU[n*Nx*Ny+y*Nx+x] = u[2, n*Nx*Ny+y*Nx+x] - u[2, n*Nx*Ny+(y-1)*Nx+x]
-
-  return 1./dt*gradTU + 1./dx*gradXU + 1./dy*gradYU
-
-def spaceTimeGrad(u, Nt, Nx, Ny, dt, dx, dy):
-  """
-    Compute the space-time gradient of a scalar field `u`.
-
-    Parameters
-    ----------
-    u : ndarray, shape (Nt*Nx*Ny,)
-        Input scalar field flattened over space-time.
-    Nt : int
-        Number of time steps.
-    Nx : int
-        Number of spatial grid points in x-direction.
-    Ny : int
-        Number of spatial grid points in y-direction.
-    dt : float
-        Time step size.
-    dx : float
-        Spatial grid spacing in x-direction.
-    dy : float
-        Spatial grid spacing in y-direction.
-
-    Returns
-    -------
-    ndarray, shape (3, Nt*Nx*Ny)
-        The gradient components [time, x, y] at each space-time point.
-  """
-  gradTU = np.zeros(Nt*Nx*Ny)
-  for n in range(Nt):
-    for y in range(Ny):
-      for x in range(Nx):
-        if n > 0 and n < Nt-1:
-          gradTU[n*Nx*Ny+y*Nx+x] = 0.5*(u[(n+1)*Nx*Ny+y*Nx+x] - u[(n-1)*Nx*Ny+y*Nx+x])
-        elif n == 0:
-          gradTU[n*Nx*Ny+y*Nx+x] = u[(n+1)*Nx*Ny+y*Nx+x] - u[(n)*Nx*Ny+y*Nx+x]
-        elif n == Nt-1:
-          gradTU[n*Nx*Ny+y*Nx+x] = u[(n)*Nx*Ny+y*Nx+x] - u[(n-1)*Nx*Ny+y*Nx+x]
-
-  gradXU = np.zeros(Nt*Nx*Ny)
-  for n in range(Nt):
-    for y in range(Ny):
-      for x in range(Nx):
-        if x > 0 and x < Nx-1:
-          gradXU[n*Nx*Ny+y*Nx+x] = 0.5*(u[n*Nx*Ny+y*Nx+x+1] - u[n*Nx*Ny+y*Nx+x-1])
-        elif x == 0:
-          gradXU[n*Nx*Ny+y*Nx+x] = u[n*Nx*Ny+y*Nx+x+1] - u[n*Nx*Ny+y*Nx+x]
-        elif x == Nx-1:
-          gradXU[n*Nx*Ny+y*Nx+x] = u[n*Nx*Ny+y*Nx+x] - u[n*Nx*Ny+y*Nx+x-1]
-
-  gradYU = np.zeros(Nt*Nx*Ny)
-  for n in range(Nt):
-    for y in range(Ny):
-      for x in range(Nx):
-        if y > 0 and y < Ny-1:
-          gradYU[n*Nx*Ny+y*Nx+x] = 0.5*(u[n*Nx*Ny+(y+1)*Nx+x] - u[n*Nx*Ny+(y-1)*Nx+x])
-        elif y == 0:
-          gradYU[n*Nx*Ny+y*Nx+x] = u[n*Nx*Ny+(y+1)*Nx+x] - u[n*Nx*Ny+y*Nx+x]
-        elif y == Ny-1:
-          gradYU[n*Nx*Ny+y*Nx+x] = u[n*Nx*Ny+y*Nx+x] - u[n*Nx*Ny+(y-1)*Nx+x]
-
-  return np.array([1./dt*gradTU, 1./dx*gradXU, 1./dy*gradYU])
-
-def lap1d_neumann(N, dx):
-    """
-    Construct a 1D Laplacian matrix with Neumann (zero-flux) boundary conditions.
-
-    Parameters
-    ----------
-    N : int
-        Number of grid points.
-    dx : float
-        Grid spacing.
-
-    Returns
-    -------
-    scipy.sparse.csr_matrix
-        Sparse Laplacian operator matrix of size N x N.
-    """
-    diagonals = [
-        np.ones(N-1),
-        -2 * np.ones(N),
-        np.ones(N-1)
-    ]
-    offsets = [-1, 0, 1]
-    L = sparse.diags(diagonals, offsets, shape=(N, N), format='lil')
-    L /= dx**2
-
-    # Neumann BC: zero-flux at boundaries
-    L[0, 0] = -1 / dx**2
-    L[0, 1] = 1 / dx**2
-    L[-1, -1] = -1 / dx**2
-    L[-1, -2] = 1 / dx**2
-
-    return L.tocsr()
-
-def assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy):
-    """
-    Assemble the full space-time Laplacian operator combining time and 2D space.
-
-    Parameters
-    ----------
-    Nt : int
-        Number of time steps.
-    dt : float
-        Time step size.
-    Nx : int
-        Number of spatial grid points in x-direction.
-    dx : float
-        Spatial grid spacing in x-direction.
-    Ny : int
-        Number of spatial grid points in y-direction.
-    dy : float
-        Spatial grid spacing in y-direction.
-
-    Returns
-    -------
-    scipy.sparse.csr_matrix
-        Sparse matrix representing the combined space-time Laplacian.
-    """
-    Lx = lap1d_neumann(Nx, dx)
-    Ly = lap1d_neumann(Ny, dy)
-    Lt = lap1d_neumann(Nt, dt)
-    Ix = sparse.eye(Nx)
-    Iy = sparse.eye(Ny)
-    It = sparse.eye(Nt)
-
-    L_space = sparse.kron(Iy, Lx) + sparse.kron(Ly, Ix)
-    I_space = sparse.eye(Nx*Ny)
-
-    L_st = sparse.kron(Lt, I_space) + sparse.kron(It, L_space)
-    return L_st
-
-def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy):
+def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, div, Nt, Nx, Ny, dt, dx, dy):
     """
     Perform one linear system solve step of the Benamou-Brenier formulation.
 
@@ -251,24 +61,37 @@ def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy):
     """
 
     # Compute RHS: divergence term
-    F = spaceTimeDiv(mu-r*q, Nt, Nx, Ny, dt, dx, dy)
+    F = div@(mu-r*q)
+
+    # for n in range(0,Nt):
+    #     Fn = F[n*Nx*Ny:(n+1)*Nx*Ny]
+    #     print(f"Fn-{n} - min: {np.min(Fn)} max: {np.max(Fn)}")
+    #     Fn  = (Fn-np.min(Fn))/(np.max(Fn)-np.min(Fn))
+    #     Image.fromarray(np.uint8(255*np.clip(Fn, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/Fn-{n}.png")
 
     # Add non-homogeneous Neumann BC correction in time at t=0 and t=Nt-1
+    rho = mu[0:Nt*Nx*Ny]
+    a = q[0:Nt*Nx*Ny]
     idx_t0 = np.arange(Nx*Ny)
-    g0 = rho0 - mu[0, 0:Nx*Ny] + r * q[0, 0:Nx*Ny]
+    # g0 = rho0 - mu[0, 0:Nx*Ny] + r * q[0, 0:Nx*Ny]
+    g0 = rho0 - rho[0:Nx*Ny] + r*a[0:Nx*Ny]
     F[idx_t0] -= 1/dt * g0
 
     idx_tN = np.arange(Nx*Ny) + (Nt-1)*Nx*Ny
-    gN = rhoT - mu[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny] + r * q[0, (Nt-1)*Nx*Ny : Nt*Nx*Ny]
+    gN = rhoT - rho[(Nt-1)*Nx*Ny:Nt*Nx*Ny] + r*a[(Nt-1)*Nx*Ny:Nt*Nx*Ny]
     F[idx_tN] += 1/dt * gN
 
     # u = spsolve(A, F)
     u, info = cg(A, F, rtol=1e-6, maxiter=1000)
+    if info > 0:
+        print(f"WARNING: CG did not converge in {info} iterations.")
+    elif info < 0:
+        raise RuntimeError("CG solver failed due to illegal input or breakdown.")
 
     return u
 
 def stepB(p, Nt, Nx, Ny):
-    """
+  """
     Nonlinear projection step applying cubic root computations.
 
     Parameters
@@ -286,128 +109,44 @@ def stepB(p, Nt, Nx, Ny):
     -------
     ndarray, shape (3, Nt*Nx*Ny)
         Projected variables after nonlinear transformation.
-    """
-
-    alpha = p[0]
-    beta1 = p[1]
-    beta2 = p[2]
-
-    rho = np.sqrt(beta1**2 + beta2**2)
-    theta = np.arctan2(beta2, beta1)
-
-    condition = 2 * alpha + beta1**2 + beta2**2 <= 0
-
-    a = np.empty_like(alpha)
-    b1 = np.empty_like(alpha)
-    b2 = np.empty_like(alpha)
-
-    # Case 1: condition is True – keep original
-    a[condition] = alpha[condition]
-    b1[condition] = beta1[condition]
-    b2[condition] = beta2[condition]
-
-    # Case 2: condition is False – nonlinear transformation
-    not_cond = ~condition
-    alpha_nc = alpha[not_cond]
-    rho_nc = rho[not_cond]
-    theta_nc = theta[not_cond]
-
-    # Expression inside condition for root logic
-    discriminant = -32 * (alpha_nc + 1) ** 3 - 108 * rho_nc ** 2
-
-    zh = np.empty_like(alpha_nc)
-    alphaH = np.empty_like(alpha_nc)
-    rhoH = np.empty_like(alpha_nc)
-
-    # Sub-case A: single real root
-    sub_A = discriminant < 0
-    if np.any(sub_A):
-        term = (1 / 4) * np.sqrt(2) * rho_nc[sub_A] + (1 / 6) * np.sqrt(
-            4 / 3 * alpha_nc[sub_A] ** 3 +
-            4 * alpha_nc[sub_A] ** 2 +
-            4 * alpha_nc[sub_A] +
-            4 / 3 +
-            4.5 * rho_nc[sub_A] ** 2
-        )
-        zh[sub_A] = -1 / 3 * (alpha_nc[sub_A] + 1) / np.cbrt(term) + np.cbrt(term)
-        alphaH[sub_A] = -zh[sub_A] ** 2
-        rhoH[sub_A] = np.sqrt(2) * zh[sub_A]
-
-    # Sub-case B: triple root
-    sub_B = ~sub_A
-    if np.any(sub_B):
-        sqrt_term = np.sqrt(-alpha_nc[sub_B] - 1)
-        acos_arg = (3 / 2) ** 1.5 * rho_nc[sub_B] / (-alpha_nc[sub_B] - 1) ** 1.5
-        zh[sub_B] = 2 * np.sqrt(2 / 3) * sqrt_term * np.cos(np.arccos(acos_arg) / 3)
-        alphaH[sub_B] = -0.5 * zh[sub_B] ** 2
-        rhoH[sub_B] = zh[sub_B]
-
-    beta1H = rhoH * np.cos(theta_nc)
-    beta2H = rhoH * np.sin(theta_nc)
-
-    a[not_cond] = alphaH
-    b1[not_cond] = beta1H
-    b2[not_cond] = beta2H
-
-    return np.array([a, b1, b2])
-
-# def stepB(p, Nt, Nx, Ny):
-#   """
-#     Nonlinear projection step applying cubic root computations.
-
-#     Parameters
-#     ----------
-#     p : ndarray, shape (3, Nt*Nx*Ny)
-#         Input variables consisting of alpha and beta components.
-#     Nt : int
-#         Number of time steps.
-#     Nx : int
-#         Number of spatial grid points in x-direction.
-#     Ny : int
-#         Number of spatial grid points in y-direction.
-
-#     Returns
-#     -------
-#     ndarray, shape (3, Nt*Nx*Ny)
-#         Projected variables after nonlinear transformation.
-#   """
+  """
   
-#   a = np.zeros(Nt*Nx*Ny)
-#   b1 = np.zeros(Nt*Nx*Ny)
-#   b2 = np.zeros(Nt*Nx*Ny)
+  a = np.zeros(Nt*Nx*Ny)
+  b1 = np.zeros(Nt*Nx*Ny)
+  b2 = np.zeros(Nt*Nx*Ny)
 
-#   for i in range(Nt*Nx*Ny):
-#     alpha = p[0,i]
-#     beta1 = p[1,i]
-#     beta2 = p[2,i] 
+  for i in range(Nt*Nx*Ny):
+    alpha = p[i]
+    beta1 = p[Nt*Nx*Ny + i]
+    beta2 = p[2*Nt*Nx*Ny + i]
 
-#     if 2*alpha + beta1**2 + beta2**2 <= 0:
-#       a[i] = alpha
-#       b1[i] = beta1
-#       b2[i] = beta2
-#     else:
-#       # on passe (alpha, beta1, beta2) en coordonnées cylindriques (alpha, rho, theta)
-#       rho = np.sqrt(beta1**2 + beta2**2)
-#       theta = np.arctan2(beta2, beta1)
-#       if -32*(alpha+1)**3-108*rho**2 < 0:
-#         # print("racine unique")
-#         zh = -1/3*(alpha + 1)/np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
-#         zh = zh + np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
-#         alphaH = -zh**2
-#         rhoH = np.sqrt(2)*zh
-#       else:
-#         # print("racine triple")
-#         zh = 2*np.sqrt(2/3)*np.sqrt(-alpha-1)*np.cos(1/3*np.arccos(np.power(3/2, 3/2)*rho/np.power(-alpha-1, 3/2)))
-#         alphaH = -0.5*zh**2
-#         rhoH = zh
-#       # on passe (alphaH, rhoH, theta) en coordonnées carthésiennes (alphaH, beta1H, beta2H)
-#       beta1H = rhoH*np.cos(theta)
-#       beta2H = rhoH*np.sin(theta)
+    if 2*alpha + beta1**2 + beta2**2 <= 0:
+      a[i] = alpha
+      b1[i] = beta1
+      b2[i] = beta2
+    else:
+      # on passe (alpha, beta1, beta2) en coordonnées cylindriques (alpha, rho, theta)
+      rho = np.sqrt(beta1**2 + beta2**2)
+      theta = np.arctan2(beta2, beta1)
+      if -32*(alpha+1)**3-108*rho**2 < 0:
+        # print("racine unique")
+        zh = -1/3*(alpha + 1)/np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
+        zh = zh + np.power(1/4*np.sqrt(2)*rho + 1/6*np.sqrt(4/3*alpha**3 + 4*alpha**2 + 9/2*rho**2 + 4*alpha + 4/3), 1/3)
+        alphaH = -zh**2
+        rhoH = np.sqrt(2)*zh
+      else:
+        # print("racine triple")
+        zh = 2*np.sqrt(2/3)*np.sqrt(-alpha-1)*np.cos(1/3*np.arccos(np.power(3/2, 3/2)*rho/np.power(-alpha-1, 3/2)))
+        alphaH = -0.5*zh**2
+        rhoH = zh
+      # on passe (alphaH, rhoH, theta) en coordonnées carthésiennes (alphaH, beta1H, beta2H)
+      beta1H = rhoH*np.cos(theta)
+      beta2H = rhoH*np.sin(theta)
 
-#       a[i] = alphaH
-#       b1[i] = beta1H
-#       b2[i] = beta2H
-#   return np.array([a, b1, b2])
+      a[i] = alphaH
+      b1[i] = beta1H
+      b2[i] = beta2H
+  return np.concatenate((a, b1, b2))
 
 def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, max_it=100):
     """
@@ -447,62 +186,84 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
     dx = 1
     dy = 1
 
-    qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
-    mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] \to \R^2
+    # qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
+    # mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] \to \R^2
+    qPrev = np.zeros([3*Nt*Nx*Ny]) # = [a, b1, b2]
+    mu = np.zeros([3*Nt*Nx*Ny]) # = [rho, m1, m2]
+    for n in range(Nt):
+        mu[n*Nx*Ny:(n+1)*Nx*Ny] = (1 - n / (Nt - 1)) * rho0 + (n / (Nt - 1)) * rhoT
     crit = -1
     # Assemble operator
-    L_st = assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
+    grad_st = operators.grad_st(Nt, Nx, Ny, dt, dx, dy, bc='N')
+    div_st  = operators.div_st(Nt, Nx, Ny, dt, dx, dy, bc='D') #-grad_st.transpose()
+    L_st    = operators.laplacian_st(Nt, Nx, Ny, dt, dx, dy, bc='N') # div_st@grad_st # assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
     I = sparse.eye(Nt*Nx*Ny)
     A = -r*L_st + r*reg_epsilon*I
-    for i in range(0,max_it):
+    for i in range(0, max_it):
       # stepA
-      phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, A, Nt, Nx, Ny, dt, dx, dy)
+      phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, A, div_st, Nt, Nx, Ny, dt, dx, dy)
+    #   for n in range(0,Nt):
+    #     phin = phi[n*Nx*Ny:(n+1)*Nx*Ny]
+    #     print(f"phin-{n} - min: {np.min(phin)} max: {np.max(phin)}")
+    #     phin  = (phin-np.min(phin))/(np.max(phin)-np.min(phin))
+    #     Image.fromarray(np.uint8(255*np.clip(phin, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/phi-{n}.png")
       # stepB
-      gradPhi = spaceTimeGrad(phi, Nt, Nx, Ny, dt, dx, dy)
+      gradPhi = (grad_st@phi) # spaceTimeGrad(phi, Nt, Nx, Ny, dt, dx, dy)
       q = stepB(gradPhi + (1./r)*mu, Nt, Nx, Ny)
+    #   for n in range(0,Nt):
+    #     an  = q[n*Nx*Ny:(n+1)*Nx*Ny]
+    #     print(f"an-{n} - min: {np.min(an)} max: {np.max(an)}")
+    #     an  = (an-np.min(an))/(np.max(an)-np.min(an))
+    #     b1n = q[Nt*Nx*Ny + n*Nx*Ny:Nt*Nx*Ny + (n+1)*Nx*Ny]
+    #     print(f"b1n-{n} - min: {np.min(b1n)} max: {np.max(b1n)}")
+    #     b1n  = (b1n-np.min(b1n))/(np.max(b1n)-np.min(b1n))
+    #     b2n = q[2*Nt*Nx*Ny + n*Nx*Ny:2*Nt*Nx*Ny + (n+1)*Nx*Ny]
+    #     print(f"b2n-{n} - min: {np.min(b2n)} max: {np.max(b2n)}")
+    #     b2n  = (b2n-np.min(b2n))/(np.max(b2n)-np.min(b2n))
+    #     Image.fromarray(np.uint8(255*np.clip(an, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/a-{n}.png")
+    #     Image.fromarray(np.uint8(255*np.clip(b1n, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/b1-{n}.png")
+    #     Image.fromarray(np.uint8(255*np.clip(b2n, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/b2-{n}.png")
       # stepC
       mu = mu + r*( gradPhi - q )
-      mu[0,:] = np.maximum(mu[0,:], 1e-10)  # Ensure positivity
+
+      # mu[0,:] = np.maximum(mu[0,:], 1e-10)  # Ensure positivity
+      mu[0:Nt*Nx*Ny] = np.maximum(mu[0:Nt*Nx*Ny], 0)  # Ensure positivity
+      # After mu update in main loop:
+    #   mu[0:Nt*Nx*Ny][:Nx*Ny] = rho0
+    #   mu[0:Nt*Nx*Ny][-Nx*Ny:] = rhoT
       qPrev = q
+
+    #   print(f"Iter {i}: mu min {mu[0:Nt*Nx*Ny].min()}, max {mu[0:Nt*Nx*Ny].max()}, sum {mu[0:Nt*Nx*Ny].sum()}")
+    #   print("norm gradPhi:", np.linalg.norm(gradPhi))
+    #   print("norm q:", np.linalg.norm(q))
       
-      res = gradPhi[0,:] + 0.5 * (gradPhi[1,:]**2 + gradPhi[2,:]**2)
-      num = np.sum(mu[0,:] * np.abs(res))
-      denom = np.sum(mu[0,:] * (gradPhi[1,:]**2 + gradPhi[2,:]**2))
+      # res = gradPhi[0,:] + 0.5 * (gradPhi[1,:]**2 + gradPhi[2,:]**2)
+      # num = np.sum(mu[0,:] * np.abs(res))
+      # denom = np.sum(mu[0,:] * (gradPhi[1,:]**2 + gradPhi[2,:]**2))
+
+      res = gradPhi[0:Nt*Nx*Ny] + 0.5 * (gradPhi[Nt*Nx*Ny:2*Nt*Nx*Ny]**2 + gradPhi[2*Nt*Nx*Ny:3*Nt*Nx*Ny]**2)
+      num = np.sum(mu[0:Nt*Nx*Ny] * np.abs(res))
+      denom = np.sum(mu[0:Nt*Nx*Ny] * (gradPhi[Nt*Nx*Ny:2*Nt*Nx*Ny]**2 + gradPhi[2*Nt*Nx*Ny:3*Nt*Nx*Ny]**2))
 
       prev_crit = crit
       crit = np.sqrt(num / (denom + 1e-10))  # prevent zero division
       print(str(crit)+" ("+str(i+1)+"/"+str(max_it)+")")
-    
+
       if crit <= convergence_tol:
         break
       if prev_crit >= 0:
         if np.abs(prev_crit - crit) < 1e-5:
           break
 
-
-    # DEBUG
-        
     Image.fromarray(np.uint8(255*np.clip(rho0, 0, 1).reshape([Ny,Nx])), 'L').save("results/rho0.png")
     Image.fromarray(np.uint8(255*np.clip(rhoT, 0, 1).reshape([Ny,Nx])), 'L').save("results/rhoT.png")
     rhon = np.zeros([Nt, Nx*Ny])
     for n in range(0, Nt):
-      rhon[n,:] = mu[0,n*Nx*Ny:(n+1)*Nx*Ny]
+      rhon[n,:] = mu[n*Nx*Ny:(n+1)*Nx*Ny]
       IE = utils.IE(Nx, Ny, rhoT, rhon[n,:])
-      print(f"{n}: {IE}")
+      print(f"{n}: mass:{np.sum(rhon[n,:])}")
       Image.fromarray(np.uint8(255*np.clip(rhon[n,:], 0, 1).reshape([Ny,Nx])), 'L').save(f"results/{n}.png")
-    
-    un = np.zeros([Nt, Nx*Ny])
-    vn = np.zeros([Nt, Nx*Ny])
-    mn = np.zeros([Nt, Nx*Ny])
-    for n in range(0, Nt):
-      [dun, dvn] = utils.spaceGrad(phi, n, Nx, Ny)
-      un[n,:] = dun
-      vn[n,:] = dvn
-      mn[n,:] = -utils.spaceDiv(np.array([un[n,:],vn[n,:]]), Nx, Ny)
-      rec = utils.apply_opticalflow(rhon[n,:], un[n,:], vn[n,:], Nx, Ny, mn[n,:])
-      Image.fromarray(np.uint8(255*np.clip(rec, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/rec-{n+1}.png")
-      utils.saveFlo(Nx, Ny, un[n,:], vn[n,:], f"results/flo-{n}.flo")
 
-    ##############
-
-    return mu, phi, q
+    grad = operators.grad(Nx, Ny, dx, dy)
+    div = -grad.transpose()
+    return utils.opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny, grad, div)

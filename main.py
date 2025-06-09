@@ -70,6 +70,19 @@ f2, w, h = utils.openGrayscaleImage(args.f1)
 # Image.fromarray(np.uint8(255*f2.reshape([h,w])), 'L').save("results/f2.png")
 # ##############################################
 
+
+w=32
+h=32
+
+f1 = np.zeros(w*h)
+for i in range(int(h/6),int(3*h/6)):
+    for j in range(int(h/6),int(3*h/6)):
+        f1[i*w+j] = 1
+f2 = np.zeros(w*h)
+for i in range(int(2*h/6),int(4*h/6)):
+    for j in range(int(2*h/6),int(4*h/6)):
+        f2[i*w+j] = 1  
+
 print("***********************************")
 print("Input images: ")
 print(" - f0 = "+str(args.f0))
@@ -81,8 +94,8 @@ if args.normalize == True:
 else:
     rho1 = f1 
     rho2 = f2
-# rho1 = cv2.GaussianBlur(rho1, (9, 9), 0).flatten()
-# rho2 = cv2.GaussianBlur(rho2, (9, 9), 0).flatten()
+# rho1 = cv2.GaussianBlur(rho1, (3, 3), 0).flatten()
+# rho2 = cv2.GaussianBlur(rho2, (3, 3), 0).flatten()  
 
 # Start timer
 start_time = time.time()
@@ -94,8 +107,9 @@ if args.algo == 'foto':
     print(f"\t - convergence_tol={args.convergence_tol}")
     print(f"\t - reg_epsilon={args.reg_epsilon}")
     print(f"\t - max_it={args.max_it}")
-    mu, phi, q = benamou_brenier.solve(rho1, rho2, args.Nt, w, h, r=args.r, convergence_tol=args.convergence_tol, reg_epsilon=args.reg_epsilon, max_it=args.max_it)
-    u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
+    # mu, phi, q = benamou_brenier.solve(rho1, rho2, args.Nt, w, h, r=args.r, convergence_tol=args.convergence_tol, reg_epsilon=args.reg_epsilon, max_it=args.max_it)
+    # u, v, m = utils.opticalflow_from_benamoubrenier(phi, args.Nt, w, h)
+    u, v, m = benamou_brenier.solve(rho1, rho2, args.Nt, w, h, r=args.r, convergence_tol=args.convergence_tol, reg_epsilon=args.reg_epsilon, max_it=args.max_it)
 elif args.algo == 'GN':
     print(" - algorithm: GN")
     print(f"\t - alpha={args.alpha}")
@@ -107,7 +121,7 @@ elif args.algo == 'GN':
 else:
     assert("not implemented")
 # stop timer
-timer = time.time() - start_time
+timer = time.time() - start_time    
 
 # Benchmark
 print("Benchmark:")

@@ -255,15 +255,15 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
         if np.abs(prev_crit - crit) < 1e-5:
           break
 
-    Image.fromarray(np.uint8(255*np.clip(rho0, 0, 1).reshape([Ny,Nx])), 'L').save("results/rho0.png")
-    Image.fromarray(np.uint8(255*np.clip(rhoT, 0, 1).reshape([Ny,Nx])), 'L').save("results/rhoT.png")
+    Image.fromarray(np.uint8(255*np.clip(Nx*Ny*rho0, 0, 1).reshape([Ny,Nx])), 'L').save("results/rho0.png")
+    Image.fromarray(np.uint8(255*np.clip(Nx*Ny*rhoT, 0, 1).reshape([Ny,Nx])), 'L').save("results/rhoT.png")
     rhon = np.zeros([Nt, Nx*Ny])
     for n in range(0, Nt):
       rhon[n,:] = mu[n*Nx*Ny:(n+1)*Nx*Ny]
       IE = utils.IE(Nx, Ny, rhoT, rhon[n,:])
       print(f"{n}: mass:{np.sum(rhon[n,:])}")
-      Image.fromarray(np.uint8(255*np.clip(rhon[n,:], 0, 1).reshape([Ny,Nx])), 'L').save(f"results/{n}.png")
+      Image.fromarray(np.uint8(255*np.clip(Nx*Ny*rhon[n,:], 0, 1).reshape([Ny,Nx])), 'L').save(f"results/{n}.png")
 
-    grad = operators.grad(Nx, Ny, dx, dy)
-    div = -grad.transpose()
+    grad = operators.grad(Nx, Ny, dx, dy, bc='N')
+    div  = operators.div(Nx, Ny, dx, dy, bc='D')
     return utils.opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny, grad, div)

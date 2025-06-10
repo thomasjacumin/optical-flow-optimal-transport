@@ -95,9 +95,9 @@ def lap1d(N, dx, bc):
 ##################################### OPERATORS #####################################
 
 def grad_st(Nt, Nx, Ny, dt, dx, dy, bc):
-  Dt = grad_1d_forward_weird(Nt, dt, bc)
-  Dx = grad_1d_forward(Nx, dx, bc)
-  Dy = grad_1d_forward(Ny, dy, bc)
+  Dt = grad_1d_central(Nt, dt, bc)
+  Dx = grad_1d_central(Nx, dx, bc)
+  Dy = grad_1d_central(Ny, dy, bc)
 
   Ixy = sparse.eye(Nx * Ny)
   It = sparse.eye(Nt)
@@ -110,9 +110,9 @@ def grad_st(Nt, Nx, Ny, dt, dx, dy, bc):
   return bmat([ [t], [x], [y] ])
 
 def div_st(Nt, Nx, Ny, dt, dx, dy, bc):
-  Dt = grad_1d_backward_weird(Nt, dt, bc)
-  Dx = grad_1d_backward(Nx, dx, bc)
-  Dy = grad_1d_backward(Ny, dy, bc)
+  Dt = grad_1d_central(Nt, dt, bc)
+  Dx = grad_1d_central(Nx, dx, bc)
+  Dy = grad_1d_central(Ny, dy, bc)
 
   Ixy = sparse.eye(Nx * Ny)
   It = sparse.eye(Nt)
@@ -138,3 +138,26 @@ def laplacian_st(Nt, Nx, Ny, dt, dx, dy, bc):
 
     L_st = sparse.kron(Lt, I_space) + sparse.kron(It, L_space)
     return L_st
+
+
+def grad(Nx, Ny, dx, dy, bc):
+  Dx = grad_1d_central(Nx, dx, bc)
+  Dy = grad_1d_central(Ny, dy, bc)
+
+  Ix = sparse.eye(Nx)
+  Iy = sparse.eye(Ny)
+
+  x = sparse.kron(Iy, Dx)
+  y = sparse.kron(Dy, Ix)
+  return bmat([ [x], [y] ])
+
+def div(Nx, Ny, dx, dy, bc):
+  Dx = grad_1d_central(Nx, dx, bc)
+  Dy = grad_1d_central(Ny, dy, bc)
+
+  Ix = sparse.eye(Nx)
+  Iy = sparse.eye(Ny)
+
+  x = sparse.kron(Iy, Dx)
+  y = sparse.kron(Dy, Ix)
+  return bmat([ [x, y] ])

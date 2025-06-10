@@ -89,8 +89,8 @@ print(" - f0 = "+str(args.f0))
 print(" - f1 = "+str(args.f1))
 if args.normalize == True:
     print(" - normalize input images")
-    rho1 = f1/(np.sum(f1)/(w*h))
-    rho2 = f2/(np.sum(f2)/(w*h))
+    rho1 = f1/(np.sum(f1))
+    rho2 = f2/(np.sum(f2))
 else:
     rho1 = f1 
     rho2 = f2

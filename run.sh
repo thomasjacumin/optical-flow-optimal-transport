@@ -55,7 +55,7 @@ run() {
                     --out=results/middlebury-1/$input/foto.flo --save-benchmark=results/middlebury-1/$input/foto.benchmark.txt \
                     --save-reconstruction=results/middlebury-1/$input/foto.rec.png \
                     --save-lum=results/middlebury-1/$input/foto.lum.png \
-                    --algo=foto --r=1 --convergence-tol=0.01 --reg-epsilon=1e-3 --Nt=16 --max-it=200 --normalize
+                    --algo=foto --r=1 --convergence-tol=0.01 --reg-epsilon=1e-2 --Nt=4 --max-it=200 --normalize
                 ./bin/color_flow results/middlebury-1/$input/foto.flo results/middlebury-1/$input/foto.png
                 touch results/middlebury-1/$input/.out.foto.sucess
             fi

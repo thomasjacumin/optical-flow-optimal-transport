@@ -2,14 +2,12 @@ import numpy as np
 
 import operators
 
-print(operators.grad_1d_forward(5, 1, bc='N').todense())
-print(operators.grad_1d_backward(5, 1, bc='D').todense())
-print(-operators.grad_1d_forward(5, 1, bc='N').transpose().todense())
-
-grad = operators.grad_st(3, 3, 3, 1, 1, 1, bc='N')
-div  = operators.div_st (3, 3, 3, 1, 1, 1, bc='D')
+grad = operators.grad_staggered_grid(4, 1, bc='N')
+div  = -grad.transpose()
+lap = div@grad
 
 print(grad.todense())
 print(div.todense())
+print(lap.todense())
 
-print(np.sum( -grad.transpose().todense() - div.todense() ) )
+print(operators.lap1d(4, 1, bc='N').todense())

@@ -2,18 +2,16 @@ from scipy import sparse
 from scipy.sparse import bmat
 import numpy as np
 
+###################################
+
 def grad_1d_forward_weird(n, h, bc):
-    if not bc in ['N', 'D']:
+    if not bc in ['N']:
         raise NotImplementedError("These boundary conditions are not implemented")
 
-    diagonals = [-np.ones(n), np.ones(n-1)]
+    diagonals = [-np.ones(n), np.ones(n)]
     offsets = [0, 1]
-    L = sparse.diags(diagonals, offsets, shape=(n, n), format='lil')
-    L /= h
-
-    L[-1, -1] = 1
-    L[-1, -2] = -1
-    
+    L = sparse.diags(diagonals, offsets, shape=(n, n+1), format='lil')
+    L /= h    
     return L.tocsr()
 
 def grad_1d_backward_weird(n, h, bc):
@@ -25,8 +23,22 @@ def grad_1d_backward_weird(n, h, bc):
     L = sparse.diags(diagonals, offsets, shape=(n, n), format='lil')
     L /= h
     
-    L[0, 0] = -1
-    L[0, 1] = 1
+    L[0, 1]   = 1
+    L[-1, -2] = -1
+    
+    return L.tocsr()
+
+def grad_1d_central_reflexion(n, h, bc):
+    if not bc in ['N', 'D']:
+        raise NotImplementedError("These boundary conditions are not implemented")
+
+    diagonals = [-0.5*np.ones(n-1), 0.5*np.ones(n-1)]
+    offsets = [-1, 1]
+    L = sparse.diags(diagonals, offsets, shape=(n, n), format='lil')
+    L /= h
+
+    L[0, 1]   = 1
+    L[-1, -2] = -1
     
     return L.tocsr()
 
@@ -44,7 +56,10 @@ def grad_1d_central(n, h, bc):
     if bc == 'N':
         L[0, 1]   = 0
         L[-1, -2] = 0
-    
+    if bc == 'D': # v_0 = v_N = 0 and v_0 = (v_-1 + v_1) / 2
+        L[0, 1]   = 1
+        L[-1, -2] = -1
+
     return L.tocsr()
 
 def grad_1d_forward(n, h, bc):
@@ -92,12 +107,27 @@ def lap1d(N, dx, bc):
 
     return L.tocsr()
 
+def grad_staggered_grid(n, h, bc):
+    if not bc in ['N']:
+        raise NotImplementedError("These boundary conditions are not implemented")
+
+    diagonals = [-np.ones(n), np.ones(n)]
+    offsets = [-1, 0]
+    L = sparse.diags(diagonals, offsets, shape=(n+1, n), format='lil')
+    L /= h
+
+    if bc == 'N':
+        L[0, 0]   = 0
+        L[-1, -1] = 0
+
+    return L.tocsr()
+
 ##################################### OPERATORS #####################################
 
 def grad_st(Nt, Nx, Ny, dt, dx, dy, bc):
-  Dt = grad_1d_central(Nt, dt, bc)
-  Dx = grad_1d_central(Nx, dx, bc)
-  Dy = grad_1d_central(Ny, dy, bc)
+  Dt = grad_staggered_grid(Nt, dt, bc)
+  Dx = grad_staggered_grid(Nx, dx, bc)
+  Dy = grad_staggered_grid(Ny, dy, bc)
 
   Ixy = sparse.eye(Nx * Ny)
   It = sparse.eye(Nt)
@@ -105,8 +135,19 @@ def grad_st(Nt, Nx, Ny, dt, dx, dy, bc):
   Iy = sparse.eye(Ny)
 
   t = sparse.kron(Dt, Ixy)
-  x = sparse.kron(It, sparse.kron(Iy, Dx))
-  y = sparse.kron(It, sparse.kron(Dy, Ix))
+  x = sparse.kron(sparse.eye(Nt), sparse.kron(Iy, Dx))
+  y = sparse.kron(sparse.eye(Nt), sparse.kron(Dy, Ix))
+
+  print(t.todense())
+  print(" ")
+  print(x.todense())
+  print(" ")
+  print(y.todense())
+
+#   test = bmat([[x, sparse.csr_matrix((2 * Nx * Ny, Nx*Ny))]])
+#   print(test.todense())
+
+
   return bmat([ [t], [x], [y] ])
 
 def div_st(Nt, Nx, Ny, dt, dx, dy, bc):

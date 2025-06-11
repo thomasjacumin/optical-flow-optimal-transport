@@ -17,6 +17,7 @@
 import numpy as np
 from scipy import sparse
 from scipy.sparse.linalg import spsolve, cg
+import matplotlib.pyplot as plt
 
 import operators
 
@@ -63,23 +64,38 @@ def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, div, Nt, Nx, Ny, dt, dx,
     # Compute RHS: divergence term
     F = div@(mu-r*q)
 
-    # for n in range(0,Nt):
-    #     Fn = F[n*Nx*Ny:(n+1)*Nx*Ny]
-    #     print(f"Fn-{n} - min: {np.min(Fn)} max: {np.max(Fn)}")
-    #     Fn  = (Fn-np.min(Fn))/(np.max(Fn)-np.min(Fn))
-    #     Image.fromarray(np.uint8(255*np.clip(Fn, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/Fn-{n}.png")
-
     # Add non-homogeneous Neumann BC correction in time at t=0 and t=Nt-1
-    rho = mu[0:Nt*Nx*Ny]
-    a = q[0:Nt*Nx*Ny]
+    rho = mu[0:(Nt+1)*Nx*Ny]
+    a = q[0:(Nt+1)*Nx*Ny]
     idx_t0 = np.arange(Nx*Ny)
     # g0 = rho0 - mu[0, 0:Nx*Ny] + r * q[0, 0:Nx*Ny]
+    # g0 = rho0 - rho[0:Nx*Ny] + r*a[0:Nx*Ny]
     g0 = rho0 - rho[0:Nx*Ny] + r*a[0:Nx*Ny]
     F[idx_t0] -= 1/dt * g0
 
     idx_tN = np.arange(Nx*Ny) + (Nt-1)*Nx*Ny
-    gN = rhoT - rho[(Nt-1)*Nx*Ny:Nt*Nx*Ny] + r*a[(Nt-1)*Nx*Ny:Nt*Nx*Ny]
+    gN = rhoT - rho[Nt*Nx*Ny:(Nt+1)*Nx*Ny] + r*a[Nt*Nx*Ny:(Nt+1)*Nx*Ny]
     F[idx_tN] += 1/dt * gN
+
+    
+
+    # plt.imshow(g0.reshape([Ny,Nx]))
+    # plt.colorbar()
+    # plt.title("$g_0$")
+    # plt.show()
+
+    # plt.imshow(gN.reshape([Ny,Nx]))
+    # plt.colorbar()
+    # plt.title("$g_N$")
+    # plt.show()
+
+
+
+    # for n in range(0,Nt):
+    #     plt.imshow(F[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+    #     plt.colorbar()
+    #     plt.title(f"$F^n(t_{{ {n} }} ,\\cdot)$")
+    #     plt.show()
 
     # u = spsolve(A, F)
     u, info = cg(A, F, rtol=1e-6, maxiter=1000)
@@ -111,14 +127,14 @@ def stepB(p, Nt, Nx, Ny):
         Projected variables after nonlinear transformation.
   """
   
-  a = np.zeros(Nt*Nx*Ny)
-  b1 = np.zeros(Nt*Nx*Ny)
-  b2 = np.zeros(Nt*Nx*Ny)
+  a = np.zeros((Nt+1)*Nx*Ny)
+  b1 = np.zeros(Nt*(Nx+1)*Ny)
+  b2 = np.zeros(Nt*Nx*(Ny+1))
 
   for i in range(Nt*Nx*Ny):
     alpha = p[i]
-    beta1 = p[Nt*Nx*Ny + i]
-    beta2 = p[2*Nt*Nx*Ny + i]
+    beta1 = p[(Nt+1)*Nx*Ny + i]
+    beta2 = p[(Nt+1)*Nx*Ny+Nt*(Nx+1)*Ny + i]
 
     if 2*alpha + beta1**2 + beta2**2 <= 0:
       a[i] = alpha
@@ -188,20 +204,39 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
 
     # qPrev = np.zeros([3, Nt*Nx*Ny]) # = [a, b] \to\R^3
     # mu = np.zeros([3, Nt*Nx*Ny]) # = [rho, m] \to \R^2
-    qPrev = np.zeros([3*Nt*Nx*Ny]) # = [a, b1, b2]
-    mu = np.zeros([3*Nt*Nx*Ny]) # = [rho, m1, m2]
-    for n in range(Nt):
-        mu[n*Nx*Ny:(n+1)*Nx*Ny] = (1 - n / (Nt - 1)) * rho0 + (n / (Nt - 1)) * rhoT
+    qPrev = np.zeros([(Nt+1)*(Nx)*(Ny) + (Nt)*(Nx+1)*(Ny) + (Nt)*(Nx)*(Ny+1)]) # = [a, b1, b2]
+    mu = np.zeros([(Nt+1)*(Nx)*(Ny) + (Nt)*(Nx+1)*(Ny) + (Nt)*(Nx)*(Ny+1)]) # = [rho, m1, m2]
+
+    for n in range(0,Nt+1):
+        mu[n*Nx*Ny:(n+1)*Nx*Ny] = (1 - n / Nt) * rho0 + (n / Nt) * rhoT
+
+    # for n in range(0,Nt+1):
+    #     mun = mu[n*Nx*Ny:(n+1)*Nx*Ny]
+    #     print(f"init: {n} - mass:{np.sum(mun)}")
+    #     plt.imshow(mun.reshape([Ny,Nx]))
+    #     plt.colorbar()
+    #     plt.title(f"$\\mu_t^n(t_{{ {n} }} ,\\cdot)$")
+    #     plt.show()
+
     crit = -1
     # Assemble operator
     grad_st = operators.grad_st(Nt, Nx, Ny, dt, dx, dy, bc='N')
-    div_st  = operators.div_st(Nt, Nx, Ny, dt, dx, dy, bc='D') #-grad_st.transpose()
-    L_st    = operators.laplacian_st(Nt, Nx, Ny, dt, dx, dy, bc='N') # div_st@grad_st # assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
+    div_st  = -grad_st.transpose()
+    # np.set_printoptions(threshold=np.inf)
+    # print(grad_st.todense())
+    # div_st  = operators.div_st(Nt, Nx, Ny, dt, dx, dy, bc='N')
+    L_st    = div_st@grad_st
+    # L_st    = operators.laplacian_st(Nt+1, Nx, Ny, dt, dx, dy, bc='N')
     I = sparse.eye(Nt*Nx*Ny)
     A = -r*L_st + r*reg_epsilon*I
     for i in range(0, max_it):
       # stepA
       phi = solve_benamou_brenier_step(mu, qPrev, rho0, rhoT, r, A, div_st, Nt, Nx, Ny, dt, dx, dy)
+    #   for n in range(Nt+1):
+    #         plt.imshow(phi[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+    #         plt.colorbar()
+    #         plt.title(f"$\\phi^n(t_{{ {n} }} ,\\cdot)$")
+    #         plt.show()
     #   for n in range(0,Nt):
     #     phin = phi[n*Nx*Ny:(n+1)*Nx*Ny]
     #     print(f"phin-{n} - min: {np.min(phin)} max: {np.max(phin)}")
@@ -209,7 +244,69 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
     #     Image.fromarray(np.uint8(255*np.clip(phin, 0, 1).reshape([Ny,Nx])), 'L').save(f"results/phi-{n}.png")
       # stepB
       gradPhi = (grad_st@phi) # spaceTimeGrad(phi, Nt, Nx, Ny, dt, dx, dy)
-      q = stepB(gradPhi + (1./r)*mu, Nt, Nx, Ny)
+
+      rho = mu[0:(Nt+1)*Nx*Ny]
+      a = qPrev[0:(Nt+1)*Nx*Ny]
+      g0 = rho0 - rho[0:Nx*Ny] + r*a[0:Nx*Ny]
+      gN = rhoT - rho[Nt*Nx*Ny:(Nt+1)*Nx*Ny] + r*a[Nt*Nx*Ny:(Nt+1)*Nx*Ny]
+
+      gradPhi[0:Nx*Ny] = g0/r
+      gradPhi[Nt*Nx*Ny:(Nt+1)*Nx*Ny] = gN/r
+
+      # check neumann bc in time
+      if i == 0:
+        for n in range(Nt+1):
+          plt.imshow(r*gradPhi[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+          plt.colorbar()
+          plt.title(f"$r \\partial_t\\phi^n(t_{{{n}}},\\cdot)$")
+          plt.show()
+
+        # plt.imshow(gradPhi[0:Nx*Ny].reshape([Ny,Nx]))
+        # plt.colorbar()
+        # plt.title("$r \\partial_t\\phi^n(-1/2,\\cdot)$")
+        # plt.show()
+
+        # plt.imshow(gradPhi[Nt*Nx*Ny:(Nt+1)*Nx*Ny].reshape([Ny,Nx]))
+        # plt.colorbar()
+        # plt.title("$r \\partial_t\\phi^n(N+1/2,\\cdot)$")
+        # plt.show()
+
+
+        # plt.imshow(r*0.5*(gradPhi[0:Nx*Ny]+gradPhi[Nx*Ny:2*Nx*Ny]).reshape([Ny,Nx]))
+        # plt.colorbar()
+        # plt.title("$r \\partial_t\\phi^n(0,\\cdot)$")
+        # plt.show()
+
+        # plt.imshow(r*0.5*(gradPhi[(Nt-1)*Nx*Ny:Nt*Nx*Ny]+gradPhi[Nt*Nx*Ny:(Nt+1)*Nx*Ny]).reshape([Ny,Nx]))
+        # plt.colorbar()
+        # plt.title("$r \\partial_t\\phi^n(1,\\cdot)$")
+        # plt.show()
+
+        # for n in range(Nt):
+        #     plt.imshow(gradPhi[(Nt+1)*Nx*Ny + (n)*(Nx+1)*Ny : (Nt+1)*Nx*Ny + (n+1)*(Nx+1)*Ny].reshape([Ny,Nx+1]))
+        #     plt.colorbar()
+        #     plt.title(f"$\\partial_x\\phi^n(t_{{ {n} }} ,\\cdot)$")
+        #     plt.show()
+
+        #     plt.imshow(gradPhi[(Nt+1)*Nx*Ny+Nt*(Nx+1)*Ny + n*Nx*(Ny+1) : (Nt+1)*Nx*Ny+Nt*(Nx+1)*Ny + (n+1)*Nx*(Ny+1)].reshape([Ny+1,Nx]))
+        #     plt.colorbar()
+        #     plt.title(f"$\\partial_y\\phi^n(t_{{ {n} }} ,\\cdot)$")
+        #     plt.show()
+
+
+    #   mu-r*q
+
+    #   q = stepB(gradPhi + (1./r)*mu, Nt, Nx, Ny)
+
+        q = qPrev
+
+    #   if i == 0:
+    #     for n in range(Nt+1):
+    #       plt.imshow(r*q[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+    #       plt.colorbar()
+    #       plt.title(f"$r q(t_{{{n}}},\\cdot)$")
+    #       plt.show()
+
     #   for n in range(0,Nt):
     #     an  = q[n*Nx*Ny:(n+1)*Nx*Ny]
     #     print(f"an-{n} - min: {np.min(an)} max: {np.max(an)}")
@@ -228,6 +325,8 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
 
       # mu[0,:] = np.maximum(mu[0,:], 1e-10)  # Ensure positivity
       mu[0:Nt*Nx*Ny] = np.maximum(mu[0:Nt*Nx*Ny], 0)  # Ensure positivity
+      for n in range(0, Nt+1):
+        print(f"it{i} - {n}: mass:{np.sum(mu[n*Nx*Ny:(n+1)*Nx*Ny])}")
       # After mu update in main loop:
     #   mu[0:Nt*Nx*Ny][:Nx*Ny] = rho0
     #   mu[0:Nt*Nx*Ny][-Nx*Ny:] = rhoT

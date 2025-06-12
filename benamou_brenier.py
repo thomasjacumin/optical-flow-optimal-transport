@@ -195,8 +195,10 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
     crit = -1
     # Assemble operator
     grad_st = operators.grad_st(Nt, Nx, Ny, dt, dx, dy, bc='N')
-    div_st  = operators.div_st(Nt, Nx, Ny, dt, dx, dy, bc='D') #-grad_st.transpose()
-    L_st    = operators.laplacian_st(Nt, Nx, Ny, dt, dx, dy, bc='N') # div_st@grad_st # assemble_space_time_laplacian(Nt, dt, Nx, dx, Ny, dy)
+    # div_st  = -grad_st.transpose()
+    div_st  = operators.div_st(Nt, Nx, Ny, dt, dx, dy, bc='N')
+    # L_st    = div_st@grad_st
+    L_st    = operators.laplacian_st(Nt, Nx, Ny, dt, dx, dy, bc='N')
     I = sparse.eye(Nt*Nx*Ny)
     A = -r*L_st + r*reg_epsilon*I
     for i in range(0, max_it):

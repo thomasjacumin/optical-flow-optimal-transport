@@ -71,17 +71,17 @@ f2, w, h = utils.openGrayscaleImage(args.f1)
 # ##############################################
 
 
-w=32
-h=32
+# w=32
+# h=32
 
-f1 = np.zeros(w*h)
-for i in range(int(h/6),int(3*h/6)):
-    for j in range(int(h/6),int(3*h/6)):
-        f1[i*w+j] = 1
-f2 = np.zeros(w*h)
-for i in range(int(2*h/6),int(4*h/6)):
-    for j in range(int(2*h/6),int(4*h/6)):
-        f2[i*w+j] = 1  
+# f1 = np.zeros(w*h)
+# for i in range(int(h/6),int(3*h/6)):
+#     for j in range(int(h/6),int(3*h/6)):
+#         f1[i*w+j] = 1
+# f2 = np.zeros(w*h)
+# for i in range(int(2*h/6),int(4*h/6)):
+#     for j in range(int(2*h/6),int(4*h/6)):
+#         f2[i*w+j] = 1  
 
 print("***********************************")
 print("Input images: ")
@@ -89,8 +89,8 @@ print(" - f0 = "+str(args.f0))
 print(" - f1 = "+str(args.f1))
 if args.normalize == True:
     print(" - normalize input images")
-    rho1 = f1/(np.sum(f1))
-    rho2 = f2/(np.sum(f2))
+    rho1 = f1/(np.sum(f1)/(w*h))
+    rho2 = f2/(np.sum(f2)/(w*h))
 else:
     rho1 = f1 
     rho2 = f2

@@ -30,6 +30,23 @@ def grad_1d_backward_weird(n, h, bc):
     
     return L.tocsr()
 
+def grad_1d_central_weird(n, h, bc):
+    if not bc in ['N', 'D']:
+        raise NotImplementedError("These boundary conditions are not implemented")
+
+    diagonals = [-0.5*np.ones(n-1), 0.5*np.ones(n-1)]
+    offsets = [-1, 1]
+    L = sparse.diags(diagonals, offsets, shape=(n, n), format='lil')
+    L /= h
+
+    if bc == 'N':
+        L[0, 0]   = -1
+        L[0, 1]   = 1
+        L[-1, -1] = 1
+        L[-1, -2] = -1
+    
+    return L.tocsr()
+
 ##################################### FD Schemes #####################################
 
 def grad_1d_central(n, h, bc):
@@ -95,9 +112,9 @@ def lap1d(N, dx, bc):
 ##################################### OPERATORS #####################################
 
 def grad_st(Nt, Nx, Ny, dt, dx, dy, bc):
-  Dt = grad_1d_central(Nt, dt, bc)
-  Dx = grad_1d_central(Nx, dx, bc)
-  Dy = grad_1d_central(Ny, dy, bc)
+  Dt = grad_1d_central_weird(Nt, dt, bc)
+  Dx = grad_1d_central_weird(Nx, dx, bc)
+  Dy = grad_1d_central_weird(Ny, dy, bc)
 
   Ixy = sparse.eye(Nx * Ny)
   It = sparse.eye(Nt)
@@ -110,9 +127,9 @@ def grad_st(Nt, Nx, Ny, dt, dx, dy, bc):
   return bmat([ [t], [x], [y] ])
 
 def div_st(Nt, Nx, Ny, dt, dx, dy, bc):
-  Dt = grad_1d_central(Nt, dt, bc)
-  Dx = grad_1d_central(Nx, dx, bc)
-  Dy = grad_1d_central(Ny, dy, bc)
+  Dt = grad_1d_central_weird(Nt, dt, bc)
+  Dx = grad_1d_central_weird(Nx, dx, bc)
+  Dy = grad_1d_central_weird(Ny, dy, bc)
 
   Ixy = sparse.eye(Nx * Ny)
   It = sparse.eye(Nt)

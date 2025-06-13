@@ -99,7 +99,7 @@ class GLLOpticalFlow(object):
 
     ft = f2 - f1
 
-    grad = operators.grad(w, h, 1, 1)
+    grad = operators.grad_forward(w, h, 1, 1)
     div = -grad.transpose()
     lap = div@grad
 

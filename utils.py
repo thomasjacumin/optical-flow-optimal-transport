@@ -175,9 +175,9 @@ def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny, grad, div):
             u[yStart*Nx + xStart] = up
             v[yStart*Nx + xStart] = vp
 
-    print(u.shape)
-    print(v.shape)
-    print(div.shape)
+    # print(u.shape)
+    # print(v.shape)
+    # print(div.shape)
     m = - div@np.concatenate((u,v)) # spaceDiv(np.array([u,v]), Nx, Ny)
     
     return u, v, m

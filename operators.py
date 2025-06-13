@@ -168,6 +168,17 @@ def grad(Nx, Ny, dx, dy, bc):
   y = sparse.kron(Dy, Ix)
   return bmat([ [x], [y] ])
 
+def grad_forward(Nx, Ny, dx, dy, bc='N'):
+  Dx = grad_1d_forward(Nx, dx, bc)
+  Dy = grad_1d_forward(Ny, dy, bc)
+
+  Ix = sparse.eye(Nx)
+  Iy = sparse.eye(Ny)
+
+  x = sparse.kron(Iy, Dx)
+  y = sparse.kron(Dy, Ix)
+  return bmat([ [x], [y] ])
+
 def div(Nx, Ny, dx, dy, bc):
   Dx = grad_1d_central(Nx, dx, bc)
   Dy = grad_1d_central(Ny, dy, bc)

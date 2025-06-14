@@ -66,8 +66,8 @@ f2, w, h = utils.openGrayscaleImage(args.f1)
 
 print("***********************************")
 print("Input images: ")
-print(" - f0 = "+str(args.f0))
-print(" - f1 = "+str(args.f1))
+print(" - f0 = "+str(args.f0)+" / total mass = "+str(np.sum(f1)))
+print(" - f1 = "+str(args.f1)+" / total mass = "+str(np.sum(f2)))
 if args.normalize == True:
     print(" - normalize input images")
     rho1 = f1/(np.sum(f1)/(w*h))
@@ -109,8 +109,12 @@ print("Benchmark:")
 rec = utils.apply_opticalflow(f1, u, v, w, h, m)
 rec = np.clip(rec, 0, 1)
 IE = utils.IE(w, h, rec, f2)
+rec_with_normalized = utils.apply_opticalflow(rho1, u, v, w, h, m)
+rec_with_normalized = np.clip(rec_with_normalized, 0, 1)
+IE_with_normalized = utils.IE(w, h, rec_with_normalized, rho2)
 print(" - time: "+str(timer)+"s")
 print(" - IE: "+str(IE))
+print(" - IE-with-normalized: "+str(IE_with_normalized))
 
 if args.ground_truth:
     wGT, hGT, uGT, vGT = utils.openFlo(args.ground_truth)
@@ -130,6 +134,7 @@ if args.save_benchmark:
         f.write("AE-mean: "+str(AAE)+"\n")
         f.write("AE-stddev: "+str(SDAE)+"\n")
     f.write("IE: "+str(IE)+"\n")
+    f.write("IE-with-normalized: "+str(IE_with_normalized)+"\n")
     f.write("time: "+str(timer)+"s")
     f.close()
 

@@ -92,7 +92,7 @@ run() {
             mkdir results/middlebury-1/$input
 
             # compute difference
-            python3 data_diff.py $frame10 $frame11 results/middlebury-1/$input/diff.png
+            python3 bin/data_diff.py $frame10 $frame11 results/middlebury-1/$input/diff.png
 
             # Gennert and Negahdaripour
             if [ ! -f "results/middlebury-1/$input/.out.gn.sucess" ]; then
@@ -100,7 +100,7 @@ run() {
                     --out=results/middlebury-1/$input/gn.flo --save-benchmark=results/middlebury-1/$input/gn.benchmark.txt \
                     --save-reconstruction=results/middlebury-1/$input/gn.rec.png \
                     --save-lum=results/middlebury-1/$input/gn.lum.png \
-                    --algo=GN --alpha=0.1 --lambda=0.2 --normalize
+                    --algo=GN --alpha=0.1 --lambda=0.2 #--normalize
                 ./bin/color_flow results/middlebury-1/$input/gn.flo results/middlebury-1/$input/gn.png
                 touch results/middlebury-1/$input/.out.gn.sucess
             fi
@@ -111,7 +111,7 @@ run() {
                     --out=results/middlebury-1/$input/foto.flo --save-benchmark=results/middlebury-1/$input/foto.benchmark.txt \
                     --save-reconstruction=results/middlebury-1/$input/foto.rec.png \
                     --save-lum=results/middlebury-1/$input/foto.lum.png \
-                    --algo=foto --r=1 --convergence-tol=0.01 --reg-epsilon=1e-2 --Nt=16 --max-it=200 --normalize
+                    --algo=foto --r=1 --convergence-tol=0.01 --reg-epsilon=1e-2 --Nt=16 --max-it=200 #--normalize
                 ./bin/color_flow results/middlebury-1/$input/foto.flo results/middlebury-1/$input/foto.png
                 touch results/middlebury-1/$input/.out.foto.sucess
             fi
@@ -129,7 +129,7 @@ run() {
             mkdir results/middlebury-1-lum/$input
 
             # compute difference
-            python3 data_diff.py $frame10 $frame11 results/middlebury-1-lum/$input/diff.png
+            python3 bin/data_diff.py $frame10 $frame11 results/middlebury-1-lum/$input/diff.png
 
             # Gennert and Negahdaripour
             if [ ! -f "results/middlebury-1-lum/$input/.out.gn.sucess" ]; then
@@ -137,7 +137,7 @@ run() {
                     --out=results/middlebury-1-lum/$input/gn.flo --save-benchmark=results/middlebury-1-lum/$input/gn.benchmark.txt \
                     --save-reconstruction=results/middlebury-1-lum/$input/gn.rec.png \
                     --save-lum=results/middlebury-1-lum/$input/gn.lum.png \
-                    --algo=GN --alpha=0.1 --lambda=0.2 --normalize
+                    --algo=GN --alpha=0.1 --lambda=0.2 #--normalize
                 ./bin/color_flow results/middlebury-1-lum/$input/gn.flo results/middlebury-1-lum/$input/gn.png
                 touch results/middlebury-1-lum/$input/.out.gn.sucess
             fi
@@ -148,7 +148,7 @@ run() {
                     --out=results/middlebury-1-lum/$input/foto.flo --save-benchmark=results/middlebury-1-lum/$input/foto.benchmark.txt \
                     --save-reconstruction=results/middlebury-1-lum/$input/foto.rec.png \
                     --save-lum=results/middlebury-1-lum/$input/foto.lum.png \
-                    --algo=foto --r=1 --convergence-tol=0.01 --reg-epsilon=1e-2 --Nt=16 --max-it=200 --normalize
+                    --algo=foto --r=1 --convergence-tol=0.01 --reg-epsilon=1e-2 --Nt=16 --max-it=200 #--normalize
                 ./bin/color_flow results/middlebury-1-lum/$input/foto.flo results/middlebury-1-lum/$input/foto.png
                 touch results/middlebury-1-lum/$input/.out.foto.sucess
             fi

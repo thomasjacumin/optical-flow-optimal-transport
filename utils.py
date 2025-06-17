@@ -17,10 +17,6 @@
 import numpy as np
 from PIL import Image
 import math
-from scipy import sparse
-from scipy.sparse import bmat
-
-import operators
 
 def openGrayscaleImage(inputPathname):
   """
@@ -97,53 +93,6 @@ def reconstructTrajectory(xStart, yStart, u, v, Nx, Ny, Nt):
         )
 
     return [xEnd - xStart, yEnd - yStart]
-    # w = Nx
-    # h = Ny
-    # xEnd = xStart
-    # yEnd = yStart
-    # for n in range(0, Nt-1):
-    #     tXEnd = int(xEnd)
-    #     tYEnd = int(yEnd)
-    #     dX = xEnd-tXEnd
-    #     dY = yEnd-tYEnd
-    #     w1 = (1-dY)*(1-dX)
-    #     w2 = dX*(1-dY)
-    #     w3 = dY*dX
-    #     w4 = (1-dX)*dY
-        
-    #     xEndN = xEnd
-    #     yEndN = yEnd
-    #     if tXEnd < w-1 and tYEnd < h-1:
-    #         xEndN = xEndN + w1*u[n, tYEnd*w + tXEnd]
-    #         xEndN = xEndN + w2*u[n, tYEnd*w + tXEnd+1]
-    #         xEndN = xEndN + w3*u[n, (tYEnd+1)*w + tXEnd+1]
-    #         xEndN = xEndN + w4*u[n, (tYEnd+1)*w + tXEnd]
-    #         yEndN = yEndN + w1*v[n, tYEnd*w + tXEnd]
-    #         yEndN = yEndN + w2*v[n, tYEnd*w + tXEnd+1]
-    #         yEndN = yEndN + w3*v[n, (tYEnd+1)*w + tXEnd+1]
-    #         yEndN = yEndN + w4*v[n, (tYEnd+1)*w + tXEnd]
-    #     elif tXEnd == w-1 and tYEnd < h-1: # left
-    #         xEndN = xEndN + w1*u[n, tYEnd*w + tXEnd]
-    #         xEndN = xEndN + w2*u[n, tYEnd*w + tXEnd]
-    #         xEndN = xEndN + w3*u[n, (tYEnd+1)*w + tXEnd]
-    #         xEndN = xEndN + w4*u[n, (tYEnd+1)*w + tXEnd]
-    #         yEndN = yEndN + w1*v[n, tYEnd*w + tXEnd]
-    #         yEndN = yEndN + w2*v[n, tYEnd*w + tXEnd]
-    #         yEndN = yEndN + w3*v[n, (tYEnd+1)*w + tXEnd]
-    #         yEndN = yEndN + w4*v[n, (tYEnd+1)*w + tXEnd]
-    #     elif tXEnd < w-1 and tYEnd == h-1: # bottom
-    #         xEndN = xEndN + w1*u[n, tYEnd*w + tXEnd]
-    #         xEndN = xEndN + w2*u[n, tYEnd*w + tXEnd+1]
-    #         xEndN = xEndN + w3*u[n, (tYEnd)*w + tXEnd+1]
-    #         xEndN = xEndN + w4*u[n, (tYEnd)*w + tXEnd]
-    #         yEndN = yEndN + w1*v[n, tYEnd*w + tXEnd]
-    #         yEndN = yEndN + w2*v[n, tYEnd*w + tXEnd+1]
-    #         yEndN = yEndN + w3*v[n, (tYEnd)*w + tXEnd+1]
-    #         yEndN = yEndN + w4*v[n, (tYEnd)*w + tXEnd]
-    
-    #     xEnd = xEndN
-    #     yEnd = yEndN
-    # return [xEnd-xStart, yEnd-yStart]
 
 def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny, grad, div):
     """
@@ -154,6 +103,8 @@ def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny, grad, div):
         Nt (int): Number of time steps.
         Nx (int): Image width.
         Ny (int): Image height.
+        grad (scipy.sparse.csr_matrix): Space gradient.
+        div (scipy.sparse.csr_matrix): Space divergence.
 
     Returns:
         tuple: u (horizontal flow), v (vertical flow), m (luminosity).
@@ -163,7 +114,6 @@ def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny, grad, div):
     vn = np.zeros([Nt, Nx*Ny])
     for n in range(0, Nt-1):
         dU = (grad@phi[n*Nx*Ny:(n+1)*Nx*Ny])
-        # [dun, dvn] = spaceGrad(phi, n, Nx, Ny)
         un[n,:] = dU[0:Nx*Ny] # dun
         vn[n,:] = dU[Nx*Ny:2*Nx*Ny] # dvn
     
@@ -175,10 +125,7 @@ def opticalflow_from_benamoubrenier(phi, Nt, Nx, Ny, grad, div):
             u[yStart*Nx + xStart] = up
             v[yStart*Nx + xStart] = vp
 
-    # print(u.shape)
-    # print(v.shape)
-    # print(div.shape)
-    m = - div@np.concatenate((u,v)) # spaceDiv(np.array([u,v]), Nx, Ny)
+    m = - div@np.concatenate((u,v))
     
     return u, v, m
 

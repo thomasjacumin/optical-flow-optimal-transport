@@ -24,6 +24,39 @@ import operators
 from PIL import Image
 import utils
 
+def interpolate_dual_to_primal(v, Nt, Nx, Ny):
+    u = np.zeros([3*Nt*Nx*Ny])
+
+    for n in range(0,Nt):
+       for j in range(0,Ny):
+          for i in range(0,Nx):
+            u[Nx*Ny*n + Nx*j + i] = 0.5*(v[Nx*Ny*n + Nx*j + i] + v[Nx*Ny*(n+1) + Nx*j + i])
+            u[Nt*Nx*Ny + Nx*Ny*n + Nx*j + i] = 0.5*(v[(Nt+1)*(Nx)*(Ny) + Nx*Ny*n + Nx*j + i] + v[(Nt+1)*(Nx)*(Ny) + Nx*Ny*n + Nx*j + i + 1])
+            u[2*Nt*Nx*Ny + Nx*Ny*n + Nx*j + i] = 0.5*(v[(Nt+1)*(Nx)*(Ny)+(Nt)*(Nx+1)*(Ny) + Nx*Ny*n + Nx*j + i] + [(Nt+1)*(Nx)*(Ny)+(Nt)*(Nx+1)*(Ny) + Nx*Ny*n + Nx*(j+1) + i])
+
+    return u
+
+def interpolate_primal_to_dual(u, Nt, Nx, Ny):
+    v = np.zeros([(Nt+1)*(Nx)*(Ny) + (Nt)*(Nx+1)*(Ny) + (Nt)*(Nx)*(Ny+1)])
+
+    for n in range(1,Nt):
+        for j in range(0,Ny):
+            for i in range(0,Nx):
+               v[Nx*Ny*n + Nx*j + i] = 0.5*(u[Nx*Ny*(n-1) + Nx*j + i] + u[Nx*Ny*n + Nx*j + i])
+
+    for n in range(0,Nt):
+        for j in range(0,Ny):
+            for i in range(1,Nx):
+                v[(Nt+1)*(Nx)*(Ny) +Nx*Ny*n + Nx*j + i] = 0.5*(u[Nt*Nx*Ny + Nx*Ny*n + Nx*j + i-1] + u[Nt*Nx*Ny + Nx*Ny*n + Nx*j + i])
+
+    for n in range(0,Nt):
+        for j in range(1,Ny):
+            for i in range(0,Nx):
+               v[(Nt+1)*(Nx)*(Ny)+(Nt)*(Nx+1)*(Ny) + Nx*Ny*n + Nx*j + i] = 0.5*(u[2*Nt*Nx*Ny + Nx*Ny*n + Nx*(j-1) + i] + u[2*Nt*Nx*Ny + Nx*Ny*n + Nx*j + i])
+   
+    return v
+   
+
 def solve_benamou_brenier_step(mu, q, rho0, rhoT, r, A, div, Nt, Nx, Ny, dt, dx, dy):
     """
     Perform one linear system solve step of the Benamou-Brenier formulation.
@@ -127,14 +160,14 @@ def stepB(p, Nt, Nx, Ny):
         Projected variables after nonlinear transformation.
   """
   
-  a = np.zeros((Nt+1)*Nx*Ny)
-  b1 = np.zeros(Nt*(Nx+1)*Ny)
-  b2 = np.zeros(Nt*Nx*(Ny+1))
+  a = np.zeros(Nt*Nx*Ny)
+  b1 = np.zeros(Nt*Nx*Ny)
+  b2 = np.zeros(Nt*Nx*Ny)
 
   for i in range(Nt*Nx*Ny):
     alpha = p[i]
-    beta1 = p[(Nt+1)*Nx*Ny + i]
-    beta2 = p[(Nt+1)*Nx*Ny+Nt*(Nx+1)*Ny + i]
+    beta1 = p[Nt*Nx*Ny + i]
+    beta2 = p[2*Nt*Nx*Ny + i]
 
     if 2*alpha + beta1**2 + beta2**2 <= 0:
       a[i] = alpha
@@ -210,17 +243,41 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
     for n in range(0,Nt+1):
         mu[n*Nx*Ny:(n+1)*Nx*Ny] = (1 - n / Nt) * rho0 + (n / Nt) * rhoT
 
-    # for n in range(0,Nt+1):
-    #     mun = mu[n*Nx*Ny:(n+1)*Nx*Ny]
-    #     print(f"init: {n} - mass:{np.sum(mun)}")
-    #     plt.imshow(mun.reshape([Ny,Nx]))
-    #     plt.colorbar()
-    #     plt.title(f"$\\mu_t^n(t_{{ {n} }} ,\\cdot)$")
-    #     plt.show()
+    test = np.zeros([Nt*Nx*Ny])
+    for n in range(0,Nt):
+       test[n*Nx*Ny:(n+1)*Nx*Ny] = (1 - n / (Nt-1)) * rho0 + (n / (Nt-1)) * rhoT
+
+    for n in range(Nt):
+        plt.imshow(test[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+        plt.colorbar()
+        plt.title(f"$test(t_{{{n}}},\\cdot)$")
+        plt.show()
+
+    
 
     crit = -1
     # Assemble operator
     grad_st = operators.grad_st(Nt, Nx, Ny, dt, dx, dy, bc='N')
+
+    grad_test = grad_st@test
+    for n in range(Nt+1):
+        plt.imshow(grad_test[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+        plt.colorbar()
+        plt.title(f"$\partial_t test(t_{{{n}}},\\cdot)$")
+        plt.show()
+
+    for n in range(Nt):
+        plt.imshow(grad_test[(Nt+1)*Nx*Ny + n*Nx*Ny:(Nt+1)*Nx*Ny + (n+1)*Nx*Ny].reshape([Ny,Nx]))
+        plt.colorbar()
+        plt.title(f"$\partial_x test(t_{{{n}}},\\cdot)$")
+        plt.show()
+
+    for n in range(Nt):
+        plt.imshow(grad_test[(Nt+1)*Nx*Ny+Nt*(Nx+1)*Ny + n*Nx*Ny:(Nt+1)*Nx*Ny+Nt*(Nx+1)*Ny + (n+1)*Nx*Ny].reshape([Ny,Nx]))
+        plt.colorbar()
+        plt.title(f"$\partial_y test(t_{{{n}}},\\cdot)$")
+        plt.show()
+
     div_st  = -grad_st.transpose()
     # np.set_printoptions(threshold=np.inf)
     # print(grad_st.todense())
@@ -254,12 +311,12 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
       gradPhi[Nt*Nx*Ny:(Nt+1)*Nx*Ny] = gN/r
 
       # check neumann bc in time
-      if i == 0:
-        for n in range(Nt+1):
-          plt.imshow(r*gradPhi[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
-          plt.colorbar()
-          plt.title(f"$r \\partial_t\\phi^n(t_{{{n}}},\\cdot)$")
-          plt.show()
+    #   if i == 0:
+    #     for n in range(Nt+1):
+    #       plt.imshow(r*gradPhi[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+    #       plt.colorbar()
+    #       plt.title(f"$r \\partial_t\\phi^n(t_{{{n}}},\\cdot)$")
+    #       plt.show()
 
         # plt.imshow(gradPhi[0:Nx*Ny].reshape([Ny,Nx]))
         # plt.colorbar()
@@ -295,17 +352,47 @@ def solve(rho0, rhoT, Nt, Nx, Ny, r=1, convergence_tol=0.3, reg_epsilon=1e-3, ma
 
 
     #   mu-r*q
+      tmp = gradPhi + (1./r)*mu
 
-    #   q = stepB(gradPhi + (1./r)*mu, Nt, Nx, Ny)
+      if i == 0:
+        # for n in range(Nt+1):
+        #   plt.imshow(tmp[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+        #   plt.colorbar()
+        #   plt.title(f"$tmp_{{{n}}}$")
+        #   plt.show()
 
-        q = qPrev
+        for n in range(Nt):
+          plt.imshow(tmp[(Nt+1)*Nx*Ny + n*Nx*Ny:(Nt+1)*Nx*Ny + (n+1)*Nx*Ny].reshape([Ny,Nx]))
+          plt.colorbar()
+          plt.title(f"$tmp_{{{n}}}$")
+          plt.show()   
 
-    #   if i == 0:
-    #     for n in range(Nt+1):
-    #       plt.imshow(r*q[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
-    #       plt.colorbar()
-    #       plt.title(f"$r q(t_{{{n}}},\\cdot)$")
-    #       plt.show()
+        # for n in range(Nt+1):
+        #   plt.imshow(tmp[(Nt+1)*Nx*Ny+Nt*(Nx+1)*Ny + n*Nx*Ny:(Nt+1)*Nx*Ny+Nt*(Nx+1)*Ny + (n+1)*Nx*Ny].reshape([Ny,Nx]))
+        #   plt.colorbar()
+        #   plt.title(f"$tmp_{{{n}}}$")
+        #   plt.show()
+
+
+      tmp_proj = interpolate_dual_to_primal(tmp, Nt, Nx, Ny)
+
+      if i == 0:
+        for n in range(Nt):
+          plt.imshow(tmp_proj[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+          plt.colorbar()
+          plt.title(f"$I tmp_{{{n}}}$")
+          plt.show()
+
+      q_primal = stepB(tmp_proj, Nt, Nx, Ny)
+
+      q = interpolate_primal_to_dual(q_primal, Nt, Nx, Ny)
+
+      if i == 0:
+        for n in range(Nt+1):
+          plt.imshow(r*q[n*Nx*Ny:(n+1)*Nx*Ny].reshape([Ny,Nx]))
+          plt.colorbar()
+          plt.title(f"$r q(t_{{{n}}},\\cdot)$")
+          plt.show()
 
     #   for n in range(0,Nt):
     #     an  = q[n*Nx*Ny:(n+1)*Nx*Ny]

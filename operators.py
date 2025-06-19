@@ -138,16 +138,6 @@ def grad_st(Nt, Nx, Ny, dt, dx, dy, bc):
   x = sparse.kron(sparse.eye(Nt), sparse.kron(Iy, Dx))
   y = sparse.kron(sparse.eye(Nt), sparse.kron(Dy, Ix))
 
-  print(t.todense())
-  print(" ")
-  print(x.todense())
-  print(" ")
-  print(y.todense())
-
-#   test = bmat([[x, sparse.csr_matrix((2 * Nx * Ny, Nx*Ny))]])
-#   print(test.todense())
-
-
   return bmat([ [t], [x], [y] ])
 
 def div_st(Nt, Nx, Ny, dt, dx, dy, bc):
